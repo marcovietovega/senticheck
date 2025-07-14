@@ -1,0 +1,26 @@
+```mermaid
+flowchart TD
+    subgraph Docker["Docker"]
+        Airflow[Airflow Scheduler<br/>Orchestrator]
+        Connector["Bluesky Connector<br/>(AT Protocol's search API)"]
+        Cleaner["Text Cleaning<br/>(strip URLs, emojis)"]
+        Scorer["Sentiment Scoring<br/> Hugging Face <br/> Transformer"]
+        UI[Streamlit Dashboard]
+        DB[("PostgreSQL")]
+    end
+
+    %% Airflow orchestration (dashed lines)
+    Airflow -.->|schedules (hourly/daily)| Connector
+    Airflow -.->|triggers after Connector| Cleaner
+    Airflow -.->|triggers after Cleaner| Scorer
+
+    %% Data flow (solid lines)
+    Connector -->|stores raw posts| DB
+    DB -->|sends raw data| Cleaner
+    Cleaner -->|stores cleaned posts| DB
+    DB -->|sends clean data| Scorer
+    Scorer -->|stores sentiment scores| DB
+
+    %% UI reads from database
+    DB -->|reads data| UI
+```
