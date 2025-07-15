@@ -1,43 +1,237 @@
 import os
+import logging
+from typing import List, Dict, Optional
+from datetime import datetime
 from dotenv import load_dotenv
 from atproto import Client
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
 
-def fetch_bluesky_posts(keyword="AI", limit=50):
-    print("Fetching posts from Bluesky...")
-    print(f"Using environment variables for authentication.")
+class BlueskyConnector:
+    """Connector for fetching posts from Bluesky using AT Protocol."""
 
-    handle = os.getenv("BLUESKY_HANDLE")
-    app_password = os.getenv("BLUESKY_APP_PASSWORD")
+    def __init__(self):
+        """Initialize the Bluesky connector with environment variables."""
+        self.handle = os.getenv("BLUESKY_HANDLE")
+        self.app_password = os.getenv("BLUESKY_APP_PASSWORD")
+        self.client = None
 
-    print(f"Handle: {handle}")
-    print(f"App Password: {app_password}")
+        if not self.handle or not self.app_password:
+            raise ValueError(
+                "BLUESKY_HANDLE and BLUESKY_APP_PASSWORD must be set in environment variables"
+            )
 
-    print(f"Keyword: {keyword}, Limit: {limit}")
+    def connect(self) -> bool:
+        """
+        Establish connection to Bluesky.
 
-    client = Client()
-    profile = client.login(handle, app_password)
-    print("Welcome,", profile.display_name)
+        Returns:
+            bool: True if connection successful, False otherwise
+        """
+        try:
+            logger.info("Connecting to Bluesky...")
+            self.client = Client()
+            profile = self.client.login(self.handle, self.app_password)
+            logger.info(f"Successfully connected as {profile.display_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect to Bluesky: {e}")
+            return False
 
-    params = {
-        "limit": limit,
-        "lang": "en",
-        "q": keyword,
-    }
+    def fetch_posts(
+        self, keyword: str = "AI", limit: int = 50, lang: str = "en"
+    ) -> List[Dict]:
+        """
+        Fetch posts from Bluesky based on keyword search.
 
-    results = client.app.bsky.feed.search_posts(params)
-    posts = results.posts
+        Args:
+            keyword (str): Search keyword
+            limit (int): Maximum number of posts to fetch (1-100)
+            lang (str): Language filter (e.g., 'en' for English)
 
-    for post in posts:
-        text = post["record"]["text"]
-        author = post["author"]["display_name"]
-        date = post["record"]["created_at"]
-        print("-" * 40)
-        print(f"Date: {date}")
-        print(f"Author: {author}")
-        print(text)
+        Returns:
+            List[Dict]: List of post dictionaries with structured data
+        """
+        if not self.client:
+            logger.error("Not connected to Bluesky. Call connect() first.")
+            return []
+
+        # Validate inputs
+        if not keyword or not keyword.strip():
+            logger.error("Keyword cannot be empty")
+            return []
+
+        if not isinstance(limit, int) or limit < 1 or limit > 100:
+            logger.error("Limit must be an integer between 1 and 100")
+            return []
+
+        try:
+            logger.info(
+                f"Fetching posts with keyword: '{keyword}', limit: {limit}, language: {lang}"
+            )
+
+            params = {
+                "limit": limit,
+                "lang": lang,
+                "q": keyword.strip(),
+            }
+
+            results = self.client.app.bsky.feed.search_posts(params)
+
+            if not hasattr(results, "posts") or not results.posts:
+                logger.warning("No posts found for the given search criteria")
+                return []
+
+            posts_data = []
+            for post in results.posts:
+                try:
+                    post_data = self._extract_post_data(post)
+                    if post_data:
+                        posts_data.append(post_data)
+                except Exception as e:
+                    logger.warning(f"Failed to extract data from post: {e}")
+                    continue
+
+            logger.info(f"Successfully fetched {len(posts_data)} posts")
+            return posts_data
+
+        except Exception as e:
+            logger.error(f"Failed to fetch posts: {e}")
+            return []
+
+    def _extract_post_data(self, post) -> Optional[Dict]:
+        """
+        Extract relevant data from a post object.
+
+        Args:
+            post: Raw post object from Bluesky API (PostView object)
+
+        Returns:
+            Dict: Structured post data or None if extraction fails
+        """
+        try:
+            # Extract basic post information (using attribute access, not dict access)
+            text = (
+                post.record.text
+                if hasattr(post, "record") and hasattr(post.record, "text")
+                else ""
+            )
+            author = (
+                post.author.display_name
+                if hasattr(post, "author") and hasattr(post.author, "display_name")
+                else "Unknown"
+            )
+            created_at = (
+                post.record.created_at
+                if hasattr(post, "record") and hasattr(post.record, "created_at")
+                else ""
+            )
+
+            # Additional metadata
+            post_uri = post.uri if hasattr(post, "uri") else ""
+            author_handle = (
+                post.author.handle
+                if hasattr(post, "author") and hasattr(post.author, "handle")
+                else ""
+            )
+            reply_count = post.reply_count if hasattr(post, "reply_count") else 0
+            repost_count = post.repost_count if hasattr(post, "repost_count") else 0
+            like_count = post.like_count if hasattr(post, "like_count") else 0
+
+            # Parse timestamp
+            timestamp = None
+            if created_at:
+                try:
+                    timestamp = datetime.fromisoformat(
+                        created_at.replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    logger.warning(f"Could not parse timestamp: {created_at}")
+
+            return {
+                "text": text,
+                "author": author,
+                "author_handle": author_handle,
+                "created_at": created_at,
+                "timestamp": timestamp,
+                "post_uri": post_uri,
+                "reply_count": reply_count,
+                "repost_count": repost_count,
+                "like_count": like_count,
+                "fetched_at": datetime.now(),
+            }
+
+        except Exception as e:
+            logger.error(f"Error extracting post data: {e}")
+            return None
+
+    def disconnect(self):
+        """Clean up connection resources."""
+        if self.client:
+            self.client = None
+            logger.info("Disconnected from Bluesky")
 
 
-fetch_bluesky_posts("Nintendo Switch 2", 5)
+def fetch_bluesky_posts(
+    keyword: str = "AI", limit: int = 50, lang: str = "en"
+) -> List[Dict]:
+    """
+    Convenience function to fetch Bluesky posts.
+
+    Args:
+        keyword (str): Search keyword
+        limit (int): Maximum number of posts to fetch
+        lang (str): Language filter
+
+    Returns:
+        List[Dict]: List of post data dictionaries
+    """
+    connector = BlueskyConnector()
+
+    if not connector.connect():
+        return []
+
+    try:
+        posts = connector.fetch_posts(keyword, limit, lang)
+        return posts
+    finally:
+        connector.disconnect()
+
+
+def print_posts(posts: List[Dict]):
+    """
+    Print posts in a readable format.
+
+    Args:
+        posts (List[Dict]): List of post dictionaries
+    """
+    if not posts:
+        print("No posts to display.")
+        return
+
+    print(f"\n{'='*60}")
+    print(f"Found {len(posts)} posts:")
+    print(f"{'='*60}")
+
+    for i, post in enumerate(posts, 1):
+        print(f"\n[{i}] {'-'*50}")
+        print(f"Date: {post.get('created_at', 'Unknown')}")
+        print(
+            f"Author: {post.get('author', 'Unknown')} (@{post.get('author_handle', 'unknown')})"
+        )
+        print(
+            f"Engagement: {post.get('like_count', 0)} likes, {post.get('repost_count', 0)} reposts, {post.get('reply_count', 0)} replies"
+        )
+        print(f"Text: {post.get('text', '')}")
+
+
+if __name__ == "__main__":
+    posts = fetch_bluesky_posts("Nintendo Switch 2", 5)
+    print_posts(posts)
