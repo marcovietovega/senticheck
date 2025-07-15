@@ -141,9 +141,7 @@ class BlueskyConnector:
                 if hasattr(post, "author") and hasattr(post.author, "handle")
                 else ""
             )
-            reply_count = post.reply_count if hasattr(post, "reply_count") else 0
-            repost_count = post.repost_count if hasattr(post, "repost_count") else 0
-            like_count = post.like_count if hasattr(post, "like_count") else 0
+            cid = post.cid if hasattr(post, "cid") else ""
 
             # Parse timestamp
             timestamp = None
@@ -162,9 +160,7 @@ class BlueskyConnector:
                 "created_at": created_at,
                 "timestamp": timestamp,
                 "post_uri": post_uri,
-                "reply_count": reply_count,
-                "repost_count": repost_count,
-                "like_count": like_count,
+                "cid": cid,
                 "fetched_at": datetime.now(),
             }
 
@@ -225,9 +221,6 @@ def print_posts(posts: List[Dict]):
         print(f"Date: {post.get('created_at', 'Unknown')}")
         print(
             f"Author: {post.get('author', 'Unknown')} (@{post.get('author_handle', 'unknown')})"
-        )
-        print(
-            f"Engagement: {post.get('like_count', 0)} likes, {post.get('repost_count', 0)} reposts, {post.get('reply_count', 0)} replies"
         )
         print(f"Text: {post.get('text', '')}")
 
