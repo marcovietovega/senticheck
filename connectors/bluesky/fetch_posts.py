@@ -42,7 +42,11 @@ class BlueskyConnector:
             logger.info(f"Successfully connected as {profile.display_name}")
             return True
         except Exception as e:
-            logger.error(f"Failed to connect to Bluesky: {e}")
+            logger.error(
+                "Failed to connect to Bluesky API - check credentials and network"
+            )
+            # For debugging, log the error type without sensitive details
+            logger.debug(f"Connection error type: {type(e).__name__}")
             return False
 
     def fetch_posts(
@@ -117,7 +121,7 @@ class BlueskyConnector:
             Dict: Structured post data or None if extraction fails
         """
         try:
-            # Extract basic post information (using attribute access, not dict access)
+            # Extract basic post information
             text = (
                 post.record.text
                 if hasattr(post, "record") and hasattr(post.record, "text")
@@ -134,7 +138,6 @@ class BlueskyConnector:
                 else ""
             )
 
-            # Additional metadata
             post_uri = post.uri if hasattr(post, "uri") else ""
             author_handle = (
                 post.author.handle
@@ -179,7 +182,7 @@ def fetch_bluesky_posts(
     keyword: str = "AI", limit: int = 50, lang: str = "en"
 ) -> List[Dict]:
     """
-    Convenience function to fetch Bluesky posts.
+    Function to fetch Bluesky posts.
 
     Args:
         keyword (str): Search keyword
