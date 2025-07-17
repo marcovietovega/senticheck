@@ -1,8 +1,7 @@
 import re
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict
 import html
-from urllib.parse import urlparse
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -74,22 +73,6 @@ class TextCleaner:
             cleaned_post = post_data.copy()
             cleaned_post["original_text"] = original_text
             cleaned_post["text"] = cleaned_text
-            cleaned_post["cleaning_metadata"] = {
-                "original_length": len(original_text),
-                "cleaned_length": len(cleaned_text),
-                "urls_removed": len(self.url_pattern.findall(original_text)),
-                "mentions_removed": (
-                    0
-                    if preserve_mentions
-                    else len(self.mention_pattern.findall(original_text))
-                ),
-                "hashtags_removed": (
-                    0
-                    if preserve_hashtags
-                    else len(self.hashtag_pattern.findall(original_text))
-                ),
-                "has_emojis": bool(self.emoji_pattern.search(original_text)),
-            }
 
             return cleaned_post
 
@@ -135,7 +118,7 @@ class TextCleaner:
         # Remove emojis
         text = self.emoji_pattern.sub("", text)
 
-        # Remove extra special characters (but keep basic punctuation)
+        # Remove extra special characters
         text = self.special_chars_pattern.sub("", text)
 
         # Normalize whitespace
@@ -174,83 +157,21 @@ class TextCleaner:
                 preserve_mentions=preserve_mentions,
             )
 
-            # Only include posts with meaningful content after cleaning
+            # Only include posts with content after cleaning
             if cleaned_post.get("text", "").strip():
                 cleaned_posts.append(cleaned_post)
             else:
-                logger.info("Skipping post with no meaningful content after cleaning")
+                logger.info("Skipping post with no content after cleaning")
 
         logger.info(f"Cleaned {len(cleaned_posts)} out of {len(posts)} posts")
         return cleaned_posts
-
-    def get_cleaning_stats(self, posts: List[Dict]) -> Dict:
-        """
-        Get statistics about the cleaning process.
-
-        Args:
-            posts (List[Dict]): List of cleaned posts with metadata
-
-        Returns:
-            Dict: Cleaning statistics
-        """
-        if not posts:
-            return {}
-
-        total_posts = len(posts)
-        total_urls = sum(
-            post.get("cleaning_metadata", {}).get("urls_removed", 0) for post in posts
-        )
-        total_mentions = sum(
-            post.get("cleaning_metadata", {}).get("mentions_removed", 0)
-            for post in posts
-        )
-        total_hashtags = sum(
-            post.get("cleaning_metadata", {}).get("hashtags_removed", 0)
-            for post in posts
-        )
-        posts_with_emojis = sum(
-            1
-            for post in posts
-            if post.get("cleaning_metadata", {}).get("has_emojis", False)
-        )
-
-        avg_original_length = (
-            sum(
-                post.get("cleaning_metadata", {}).get("original_length", 0)
-                for post in posts
-            )
-            / total_posts
-        )
-        avg_cleaned_length = (
-            sum(
-                post.get("cleaning_metadata", {}).get("cleaned_length", 0)
-                for post in posts
-            )
-            / total_posts
-        )
-
-        return {
-            "total_posts_cleaned": total_posts,
-            "total_urls_removed": total_urls,
-            "total_mentions_removed": total_mentions,
-            "total_hashtags_removed": total_hashtags,
-            "posts_with_emojis": posts_with_emojis,
-            "emoji_percentage": (posts_with_emojis / total_posts) * 100,
-            "avg_original_length": round(avg_original_length, 2),
-            "avg_cleaned_length": round(avg_cleaned_length, 2),
-            "avg_length_reduction": round(
-                ((avg_original_length - avg_cleaned_length) / avg_original_length)
-                * 100,
-                2,
-            ),
-        }
 
 
 def clean_bluesky_posts(
     posts: List[Dict], preserve_hashtags: bool = False, preserve_mentions: bool = False
 ) -> List[Dict]:
     """
-    Convenience function to clean Bluesky posts.
+    Function to clean Bluesky posts.
 
     Args:
         posts (List[Dict]): List of post dictionaries from Bluesky
@@ -262,35 +183,6 @@ def clean_bluesky_posts(
     """
     cleaner = TextCleaner()
     return cleaner.clean_posts_batch(posts, preserve_hashtags, preserve_mentions)
-
-
-def print_cleaning_stats(posts: List[Dict]):
-    """
-    Print cleaning statistics in a readable format.
-
-    Args:
-        posts (List[Dict]): List of cleaned posts with metadata
-    """
-    cleaner = TextCleaner()
-    stats = cleaner.get_cleaning_stats(posts)
-
-    if not stats:
-        print("No cleaning statistics available.")
-        return
-
-    print(f"\n{'='*50}")
-    print("TEXT CLEANING STATISTICS")
-    print(f"{'='*50}")
-    print(f"Total posts cleaned: {stats['total_posts_cleaned']}")
-    print(f"URLs removed: {stats['total_urls_removed']}")
-    print(f"Mentions removed: {stats['total_mentions_removed']}")
-    print(f"Hashtags removed: {stats['total_hashtags_removed']}")
-    print(
-        f"Posts with emojis: {stats['posts_with_emojis']} ({stats['emoji_percentage']:.1f}%)"
-    )
-    print(f"Average original length: {stats['avg_original_length']} characters")
-    print(f"Average cleaned length: {stats['avg_cleaned_length']} characters")
-    print(f"Average length reduction: {stats['avg_length_reduction']:.1f}%")
 
 
 if __name__ == "__main__":
@@ -317,7 +209,5 @@ if __name__ == "__main__":
         for i, post in enumerate(cleaned_posts, 1):
             print(f"\n[{i}] {post.get('text', '')}")
 
-        # Show cleaning statistics
-        print_cleaning_stats(cleaned_posts)
     else:
         print("No posts found to clean.")
