@@ -76,7 +76,7 @@ def fetch_bluesky_posts(**context) -> Dict[str, Any]:
         Dict with fetching results
     """
     # Get configuration from Airflow Variables (with defaults)
-    max_posts = int(Variable.get("bluesky_max_posts", default_var=100))
+    max_posts = int(Variable.get("bluesky_max_posts", default=100))
 
     print(f"Starting Bluesky data collection (max posts: {max_posts})")
 
