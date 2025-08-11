@@ -156,6 +156,11 @@ class BlueskyConnector:
                 except ValueError:
                     logger.warning(f"Could not parse timestamp: {created_at}")
 
+            langs = (
+                post.record.langs
+                if hasattr(post, "record") and hasattr(post.record, "langs")
+                else ""
+            )
             return {
                 "text": text,
                 "author": author,
@@ -165,6 +170,7 @@ class BlueskyConnector:
                 "post_uri": post_uri,
                 "cid": cid,
                 "fetched_at": datetime.now(),
+                "langs": langs,
             }
 
         except Exception as e:
@@ -221,13 +227,14 @@ def print_posts(posts: List[Dict]):
 
     for i, post in enumerate(posts, 1):
         print(f"\n[{i}] {'-'*50}")
-        print(f"Date: {post.get('created_at', 'Unknown')}")
+        # print(f"Date: {post.get('created_at', 'Unknown')}")
         print(
             f"Author: {post.get('author', 'Unknown')} (@{post.get('author_handle', 'unknown')})"
         )
         print(f"Text: {post.get('text', '')}")
+        print(f"Languages: {post.get('langs', 'Unknown')}")
 
 
 if __name__ == "__main__":
-    posts = fetch_bluesky_posts("Nintendo Switch 2", 5)
+    posts = fetch_bluesky_posts("AI", 5)
     print_posts(posts)
