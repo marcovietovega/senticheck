@@ -129,7 +129,7 @@ class BlueskyConnector:
             )
             author = (
                 post.author.display_name
-                if hasattr(post, "author") and hasattr(post.author, "display_name")
+                if hasattr(post, "author") and hasattr(post.author, "display_name") and post.author.display_name.strip()
                 else "Unknown"
             )
             created_at = (

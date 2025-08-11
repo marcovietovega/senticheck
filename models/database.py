@@ -32,7 +32,7 @@ class RawPost(Base):
     text = Column(Text, nullable=False)
 
     # Author information
-    author = Column(String(255), nullable=False)
+    author = Column(String(255), nullable=True, default="Unknown")
     author_handle = Column(String(255), nullable=False, index=True)
 
     # Timestamps

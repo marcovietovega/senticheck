@@ -67,7 +67,7 @@ class DatabaseOperations:
                         post_uri=post_data.get("post_uri", ""),
                         cid=post_data.get("cid", ""),
                         text=post_data.get("text", ""),
-                        author=post_data.get("author", ""),
+                        author=post_data.get("author") or "Unknown",
                         author_handle=post_data.get("author_handle", ""),
                         created_at=post_data.get("timestamp")
                         or post_data.get("fetched_at"),
