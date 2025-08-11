@@ -1,41 +1,20 @@
-# Core dependencies for SentiCheck
-atproto>=0.0.46                 # Bluesky AT Protocol client
-python-dotenv>=1.0.0           # Environment variable management
+# SentiCheck - Production Requirements
+# Only packages actually used in the current implementation
 
-# Data processing and storage
-pandas>=2.0.0                  # Data manipulation and analysis
-psycopg2-binary>=2.9.0         # PostgreSQL adapter
-sqlalchemy>=2.0.0              # SQL toolkit and ORM
+# Apache Airflow for workflow orchestration
+apache-airflow>=3.0.4
+apache-airflow-providers-postgres>=6.2.0
 
-# Machine Learning and NLP
-transformers>=4.30.0           # Hugging Face transformers for sentiment analysis
-torch>=2.0.0                   # PyTorch for ML models
-datasets>=2.12.0               # Hugging Face datasets
-scikit-learn>=1.3.0            # Additional ML utilities
+# Bluesky AT Protocol client
+atproto>=0.0.46
 
-# Text processing
-nltk>=3.8                      # Natural Language Toolkit
-regex>=2023.6.3                # Advanced regex operations
-emoji>=2.0.0                   # Emoji handling
+# Database connectivity
+psycopg2-binary>=2.9.0
+sqlalchemy>=2.0.0
 
-# Web framework and UI
-streamlit>=1.24.0              # Dashboard and web interface
-plotly>=5.15.0                 # Interactive plotting
-matplotlib>=3.7.0              # Basic plotting
-seaborn>=0.12.0                # Statistical data visualization
+# Environment variable management
+python-dotenv>=1.0.0
 
-# Workflow orchestration
-apache-airflow>=2.6.0          # Workflow management
-pendulum>=2.1.0                # DateTime library for Airflow
-
-# Development and testing
-pytest>=7.4.0                  # Testing framework
-pytest-cov>=4.1.0             # Test coverage
-black>=23.0.0                  # Code formatting
-flake8>=6.0.0                  # Code linting
-mypy>=1.4.0                    # Type checking
-
-# Utilities
-requests>=2.31.0               # HTTP library
-python-dateutil>=2.8.0        # Date utilities
-pytz>=2023.3                   # Timezone handling
+# Machine Learning (for sentiment analysis)
+transformers>=4.30.0
+torch>=2.0.0
