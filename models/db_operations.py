@@ -38,7 +38,6 @@ class DatabaseOperations:
         with self.db_connection.get_session() as session:
             for post_data in posts_data:
                 try:
-                    # Check if post already exists
                     existing_post = (
                         session.query(RawPost)
                         .filter_by(post_uri=post_data.get("post_uri", ""))
@@ -51,7 +50,6 @@ class DatabaseOperations:
                         )
                         continue
 
-                    # Create new raw post
                     raw_post = RawPost(
                         post_uri=post_data.get("post_uri", ""),
                         cid=post_data.get("cid", ""),
@@ -88,7 +86,6 @@ class DatabaseOperations:
             posts = (
                 session.query(RawPost).filter_by(is_processed=False).limit(limit).all()
             )
-            # Detach from session to avoid lazy loading issues
             session.expunge_all()
             return posts
 
@@ -127,9 +124,8 @@ class DatabaseOperations:
                 )
 
                 session.add(cleaned_post)
-                session.flush()  # Get the ID without committing
+                session.flush()
 
-                # Mark raw post as processed
                 raw_post = session.query(RawPost).filter_by(id=raw_post_id).first()
                 if raw_post:
                     raw_post.is_processed = True
@@ -181,6 +177,142 @@ class DatabaseOperations:
         except Exception as e:
             logger.error(f"Failed to log processing activity: {e}")
 
+    def get_unanalyzed_posts(self, limit: int = 100) -> List[CleanedPost]:
+        """
+        Get cleaned posts that haven't been analyzed for sentiment yet.
+
+        Args:
+            limit: Maximum number of posts to return
+
+        Returns:
+            List[CleanedPost]: List of unanalyzed cleaned posts
+        """
+        with self.db_connection.get_session() as session:
+            posts = (
+                session.query(CleanedPost)
+                .filter_by(is_analyzed=False)
+                .limit(limit)
+                .all()
+            )
+
+            session.expunge_all()
+            return posts
+
+    def store_sentiment_analysis(
+        self,
+        cleaned_post_id: int,
+        sentiment_label: str,
+        confidence_score: float,
+        positive_score: float = None,
+        negative_score: float = None,
+        neutral_score: float = None,
+        model_name: str = "unknown",
+        model_version: str = None,
+    ) -> Optional[int]:
+        """
+        Store sentiment analysis results.
+
+        Args:
+            cleaned_post_id: ID of the cleaned post
+            sentiment_label: The predicted sentiment ('positive', 'negative', 'neutral')
+            confidence_score: Confidence score (0.0 to 1.0)
+            positive_score: Positive sentiment score
+            negative_score: Negative sentiment score
+            neutral_score: Neutral sentiment score
+            model_name: Name of the model used
+            model_version: Version of the model
+
+        Returns:
+            int: ID of the created sentiment analysis, or None if failed
+        """
+        try:
+            with self.db_connection.get_session() as session:
+                sentiment_analysis = SentimentAnalysis(
+                    cleaned_post_id=cleaned_post_id,
+                    sentiment_label=sentiment_label,
+                    confidence_score=confidence_score,
+                    positive_score=positive_score,
+                    negative_score=negative_score,
+                    neutral_score=neutral_score,
+                    model_name=model_name,
+                    model_version=model_version,
+                )
+
+                session.add(sentiment_analysis)
+                session.flush()
+
+                cleaned_post = (
+                    session.query(CleanedPost).filter_by(id=cleaned_post_id).first()
+                )
+                if cleaned_post:
+                    cleaned_post.is_analyzed = True
+
+                sentiment_analysis_id = sentiment_analysis.id
+
+            logger.debug(f"Stored sentiment analysis with ID: {sentiment_analysis_id}")
+            return sentiment_analysis_id
+
+        except Exception as e:
+            logger.error(f"Failed to store sentiment analysis: {e}")
+            return None
+
+    def store_sentiment_analysis_batch(self, sentiment_results: List[Dict]) -> int:
+        """
+        Store multiple sentiment analysis results in batch.
+
+        Args:
+            sentiment_results: List of sentiment analysis dictionaries with:
+                - cleaned_post_id: int
+                - sentiment_label: str
+                - confidence_score: float
+                - positive_score: float (optional)
+                - negative_score: float (optional)
+                - neutral_score: float (optional)
+                - model_name: str
+                - model_version: str (optional)
+
+        Returns:
+            int: Number of sentiment analyses stored
+        """
+        stored_count = 0
+
+        with self.db_connection.get_session() as session:
+            for result in sentiment_results:
+                try:
+                    sentiment_analysis = SentimentAnalysis(
+                        cleaned_post_id=result["cleaned_post_id"],
+                        sentiment_label=result["sentiment_label"],
+                        confidence_score=result["confidence_score"],
+                        positive_score=result.get("positive_score"),
+                        negative_score=result.get("negative_score"),
+                        neutral_score=result.get("neutral_score"),
+                        model_name=result.get("model_name", "unknown"),
+                        model_version=result.get("model_version"),
+                    )
+
+                    session.add(sentiment_analysis)
+
+                    cleaned_post = (
+                        session.query(CleanedPost)
+                        .filter_by(id=result["cleaned_post_id"])
+                        .first()
+                    )
+                    if cleaned_post:
+                        cleaned_post.is_analyzed = True
+
+                    stored_count += 1
+
+                except Exception as e:
+                    logger.error(
+                        f"Failed to store sentiment analysis for post {result.get('cleaned_post_id')}: {e}"
+                    )
+                    continue
+
+        logger.info(
+            f"Stored {stored_count} sentiment analyses out of {len(sentiment_results)} total"
+        )
+        return stored_count
+
     def get_database_stats(self) -> Dict[str, Any]:
         """
         Get database statistics.
@@ -214,7 +346,6 @@ class DatabaseOperations:
             return {}
 
 
-# Global database operations instance
 db_operations = None
 
 

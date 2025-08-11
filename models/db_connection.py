@@ -8,10 +8,8 @@ from dotenv import load_dotenv
 
 from .database import Base
 
-# Load environment variables
 load_dotenv()
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +41,7 @@ class DatabaseConnection:
         try:
             self.engine = create_engine(
                 self.database_url,
-                echo=False,  # Set to True for SQL query logging
+                echo=False,
                 pool_pre_ping=True,  # Validate connections before use
                 pool_recycle=3600,  # Recycle connections after 1 hour
             )
@@ -105,7 +103,6 @@ class DatabaseConnection:
             session.close()
 
 
-# Global database connection instance
 db_connection = None
 
 
