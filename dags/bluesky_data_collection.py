@@ -13,7 +13,7 @@ from typing import Dict, Any
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
-from airflow.models import Variable
+from airflow.sdk import Variable
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
