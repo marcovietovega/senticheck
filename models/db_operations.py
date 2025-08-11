@@ -1,15 +1,30 @@
 import logging
+import sys
+import os
 from typing import Optional, List, Dict, Any
 
-from .database import (
-    RawPost,
-    CleanedPost,
-    SentimentAnalysis,
-    ProcessingLog,
-)
-from .db_connection import get_db_connection
 
-# Configure logging
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from .database import (
+        RawPost,
+        CleanedPost,
+        SentimentAnalysis,
+        ProcessingLog,
+    )
+    from .db_connection import get_db_connection
+except ImportError:
+    from database import (
+        RawPost,
+        CleanedPost,
+        SentimentAnalysis,
+        ProcessingLog,
+    )
+    from db_connection import get_db_connection
+
+
 logger = logging.getLogger(__name__)
 
 

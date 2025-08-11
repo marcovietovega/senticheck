@@ -7,11 +7,21 @@ sentiment analysis pipeline including data storage and retrieval.
 """
 
 import logging
+import sys
+import os
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 
-from .db_operations import get_db_operations
-from .database import RawPost, CleanedPost, SentimentAnalysis
+
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from .db_operations import get_db_operations
+    from .database import RawPost, CleanedPost, SentimentAnalysis
+except ImportError:
+    from db_operations import get_db_operations
+    from database import RawPost, CleanedPost, SentimentAnalysis
 
 logger = logging.getLogger(__name__)
 
@@ -349,14 +359,140 @@ def get_db_manager() -> SentiCheckDBManager:
     return db_manager
 
 
-if __name__ == "__main__":
+def main():
+    """
+    Main function for testing and managing the SentiCheck database.
+    Provides an interactive interface for various database operations.
+    """
+    print("=" * 60)
+    print("SENTICHECK DATABASE MANAGER")
+    print("=" * 60)
 
-    manager = get_db_manager()
+    try:
+        # Initialize manager
+        manager = get_db_manager()
 
-    if manager.test_connection():
+        # Test connection
+        print("\n1. Testing database connection...")
+        if not manager.test_connection():
+            print("❌ Database connection failed!")
+            print("Please check your .env file and database configuration.")
+            return
         print("✅ Database connection successful")
 
+        # Show current stats
+        print("\n2. Current database statistics:")
         stats = manager.get_database_stats()
-        print("Database stats:", stats)
-    else:
-        print("❌ Database connection failed")
+        for key, value in stats.items():
+            print(f"   {key.replace('_', ' ').title()}: {value}")
+
+        # Interactive menu
+        while True:
+            print("\n" + "=" * 60)
+            print("DATABASE OPERATIONS MENU")
+            print("=" * 60)
+            print("1. Show database statistics")
+            print("2. Process raw posts to cleaned")
+            print("3. Analyze sentiment for cleaned posts")
+            print("4. Run full pipeline test")
+            print("5. Create/recreate database tables")
+            print("6. Show unprocessed posts count")
+            print("7. Show unanalyzed posts count")
+            print("8. Exit")
+
+            choice = input("\nEnter your choice (1-8): ").strip()
+
+            if choice == "1":
+                print("\nDatabase Statistics:")
+                stats = manager.get_database_stats()
+                for key, value in stats.items():
+                    print(f"  {key.replace('_', ' ').title()}: {value}")
+
+            elif choice == "2":
+                limit = int(input("Enter max posts to process (default 10): ") or "10")
+                print(f"\nProcessing up to {limit} raw posts...")
+                processed = manager.process_raw_posts_to_cleaned(limit=limit)
+                print(f"✅ Processed {processed} posts to cleaned format")
+
+            elif choice == "3":
+                limit = int(input("Enter max posts to analyze (default 10): ") or "10")
+                model = input(
+                    "Model name (default: cardiffnlp/twitter-roberta-base-sentiment-latest): "
+                ).strip()
+                if not model:
+                    model = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+                print(f"\nAnalyzing sentiment for up to {limit} posts...")
+                analyzed = manager.analyze_cleaned_posts_sentiment(
+                    model_name=model, limit=limit
+                )
+                print(f"✅ Analyzed sentiment for {analyzed} posts")
+
+            elif choice == "4":
+                print("\nRunning full pipeline test...")
+                try:
+                    from connectors.bluesky.fetch_posts import fetch_bluesky_posts
+
+                    keyword = input("Search keyword (default: AI): ").strip() or "AI"
+                    limit = int(input("Number of posts to fetch (default: 3): ") or "3")
+
+                    print(f"Fetching {limit} posts for '{keyword}'...")
+                    posts = fetch_bluesky_posts(keyword, limit)
+
+                    if posts:
+                        results = manager.run_full_pipeline(
+                            posts, search_keyword=keyword
+                        )
+                        print(f"Pipeline Results:")
+                        for key, value in results.items():
+                            print(f"  {key.replace('_', ' ').title()}: {value}")
+                    else:
+                        print("❌ No posts fetched")
+
+                except ImportError:
+                    print("❌ Bluesky connector not available")
+                except Exception as e:
+                    print(f"❌ Pipeline test failed: {e}")
+
+            elif choice == "5":
+                confirm = input("This will recreate all tables. Are you sure? (y/N): ")
+                if confirm.lower() == "y":
+                    print("Creating/recreating database tables...")
+                    manager.create_tables()
+                    print("✅ Database tables created successfully")
+                else:
+                    print("Operation cancelled")
+
+            elif choice == "6":
+                unprocessed = manager.get_unprocessed_posts(limit=1000)
+                print(f"Unprocessed posts: {len(unprocessed)}")
+                if unprocessed:
+                    show_details = input("Show first 5 posts? (y/N): ")
+                    if show_details.lower() == "y":
+                        for i, post in enumerate(unprocessed[:5], 1):
+                            print(f"  [{i}] {post.author}: {post.text[:100]}...")
+
+            elif choice == "7":
+                unanalyzed = manager.get_unanalyzed_posts(limit=1000)
+                print(f"Unanalyzed posts: {len(unanalyzed)}")
+                if unanalyzed:
+                    show_details = input("Show first 5 posts? (y/N): ")
+                    if show_details.lower() == "y":
+                        for i, post in enumerate(unanalyzed[:5], 1):
+                            print(f"  [{i}] {post.cleaned_text[:100]}...")
+
+            elif choice == "8":
+                print("Goodbye!")
+                break
+
+            else:
+                print("Invalid choice. Please enter 1-8.")
+
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user.")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        logger.error(f"Main function error: {e}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,12 +1,21 @@
 import os
 import logging
+import sys
 from contextlib import contextmanager
 from typing import Generator
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from dotenv import load_dotenv
 
-from .database import Base
+# Add parent directory to path for imports when running directly
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from .database import Base
+except ImportError:
+    # Fallback for when running directly
+    from database import Base
 
 load_dotenv()
 
