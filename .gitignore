@@ -4,6 +4,33 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
+# Airflow sensitive files - DO NOT COMMIT
+airflow.db
+airflow.db-*
+simple_auth_manager_passwords.json.generated
+webserver_config.py
+airflow/logs/
+standalone_admin_password.txt
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Credentials and secrets
+secrets/
+credentials/
+*.key
+*.pem
+*.p12
+*_key.json
+service-account*.json
+
 # Test files
 test_*.py
 *_test.py
+
+# Local development
+.pytest_cache/
+.coverage
+htmlcov/
