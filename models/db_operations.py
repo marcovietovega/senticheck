@@ -12,7 +12,6 @@ try:
         RawPost,
         CleanedPost,
         SentimentAnalysis,
-        ProcessingLog,
     )
     from .db_connection import get_db_connection
 except ImportError:
@@ -20,7 +19,6 @@ except ImportError:
         RawPost,
         CleanedPost,
         SentimentAnalysis,
-        ProcessingLog,
     )
     from db_connection import get_db_connection
 
@@ -153,44 +151,6 @@ class DatabaseOperations:
         except Exception as e:
             logger.error(f"Failed to store cleaned post: {e}")
             return None
-
-    def log_processing_activity(
-        self,
-        process_type: str,
-        status: str,
-        message: str = None,
-        records_processed: int = 0,
-        processing_time: float = None,
-        error_details: Dict = None,
-        processing_metadata: Dict = None,
-    ):
-        """
-        Log processing activity.
-
-        Args:
-            process_type: Type of process ('fetch', 'clean', 'analyze')
-            status: Status ('success', 'error', 'warning')
-            message: Optional message
-            records_processed: Number of records processed
-            processing_time: Processing time in seconds
-            error_details: Error details if any
-            processing_metadata: Additional metadata
-        """
-        try:
-            with self.db_connection.get_session() as session:
-                log_entry = ProcessingLog(
-                    process_type=process_type,
-                    status=status,
-                    message=message,
-                    records_processed=records_processed,
-                    processing_time_seconds=processing_time,
-                    error_details=error_details,
-                    processing_metadata=processing_metadata,
-                )
-                session.add(log_entry)
-
-        except Exception as e:
-            logger.error(f"Failed to log processing activity: {e}")
 
     def get_unanalyzed_posts(self, limit: int = 100) -> List[CleanedPost]:
         """

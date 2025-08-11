@@ -328,25 +328,6 @@ class SentiCheckDBManager:
             results["errors"] = 1
             return results
 
-    def log_processing_activity(
-        self,
-        process_type: str,
-        status: str,
-        message: str = None,
-        records_processed: int = 0,
-        processing_time: float = None,
-        error_details: Dict = None,
-    ):
-        """Log processing activity."""
-        self.db_ops.log_processing_activity(
-            process_type=process_type,
-            status=status,
-            message=message,
-            records_processed=records_processed,
-            processing_time=processing_time,
-            error_details=error_details,
-        )
-
 
 db_manager = None
 
