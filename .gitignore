@@ -4,13 +4,13 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
-# Airflow sensitive files - DO NOT COMMIT
+# Airflow sensitive files
 airflow.db
 airflow.db-*
 simple_auth_manager_passwords.json.generated
 webserver_config.py
 airflow/logs/
-standalone_admin_password.txt
+logs/
 
 # Database files
 *.db
