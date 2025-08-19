@@ -11,6 +11,7 @@ simple_auth_manager_passwords.json.generated
 webserver_config.py
 airflow/logs/
 logs/
+airflow/
 
 # Database files
 *.db
@@ -34,3 +35,4 @@ test_*.py
 .pytest_cache/
 .coverage
 htmlcov/
+senticheck/
