@@ -14,6 +14,7 @@ from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import Variable
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
@@ -303,5 +304,19 @@ summary_task = BashOperator(
     dag=dag,
 )
 
+trigger_sentiment_analysis = TriggerDagRunOperator(
+    task_id="trigger_sentiment_analysis",
+    trigger_dag_id="sentiment_analysis_pipeline",
+    wait_for_completion=False,
+    dag=dag,
+)
+
 # Define task dependencies
-(check_db_task >> check_posts_task >> clean_posts_task >> validate_task >> summary_task)
+(
+    check_db_task
+    >> check_posts_task
+    >> clean_posts_task
+    >> validate_task
+    >> summary_task
+    >> trigger_sentiment_analysis
+)
