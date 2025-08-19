@@ -13,7 +13,7 @@ from typing import Dict, Any
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.standard.operators.bash import BashOperator
-from airflow.models import Variable
+from airflow.sdk import Variable
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
@@ -77,7 +77,7 @@ def fetch_bluesky_posts(**context) -> Dict[str, Any]:
         Dict with fetching results
     """
     # Get configuration from Airflow Variables (with defaults)
-    max_posts = int(Variable.get("bluesky_max_posts", default_var=100))
+    max_posts = int(Variable.get("bluesky_max_posts", default=100))
 
     print(f"Starting Bluesky data collection (max posts: {max_posts})")
 
