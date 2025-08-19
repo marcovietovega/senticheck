@@ -14,6 +14,7 @@ from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import Variable
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
@@ -201,4 +202,18 @@ cleanup_task = BashOperator(
 )
 
 
-check_env_task >> setup_db_task >> fetch_posts_task >> store_posts_task >> cleanup_task
+trigger_cleaning = TriggerDagRunOperator(
+    task_id="trigger_text_cleaning",
+    trigger_dag_id="text_cleaning_pipeline",
+    wait_for_completion=False,
+    dag=dag,
+)
+
+(
+    check_env_task
+    >> setup_db_task
+    >> fetch_posts_task
+    >> store_posts_task
+    >> cleanup_task
+    >> trigger_cleaning
+)
