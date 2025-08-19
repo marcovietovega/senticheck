@@ -77,6 +77,9 @@ class CleanedPost(Base):
     preserve_hashtags = Column(Boolean, default=False)
     preserve_mentions = Column(Boolean, default=False)
 
+    # Cleaning metadata - stores information about the cleaning process
+    cleaning_metadata = Column(JSON, nullable=True)
+
     # Timestamps
     cleaned_at = Column(
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
