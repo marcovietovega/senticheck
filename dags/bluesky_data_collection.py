@@ -11,12 +11,13 @@ from datetime import datetime, timedelta
 from typing import Dict, Any
 
 from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.operators.bash import BashOperator
-from airflow.sdk import Variable
+from airflow.providers.standard.operators.python import PythonOperator
+from airflow.providers.standard.operators.bash import BashOperator
+from airflow.models import Variable
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from connectors.bluesky.fetch_posts import BlueskyConnector
 from models.db_manager import SentiCheckDBManager
@@ -76,7 +77,7 @@ def fetch_bluesky_posts(**context) -> Dict[str, Any]:
         Dict with fetching results
     """
     # Get configuration from Airflow Variables (with defaults)
-    max_posts = int(Variable.get("bluesky_max_posts", default=100))
+    max_posts = int(Variable.get("bluesky_max_posts", default_var=100))
 
     print(f"Starting Bluesky data collection (max posts: {max_posts})")
 
@@ -141,9 +142,42 @@ def store_posts_in_database(**context) -> Dict[str, Any]:
         raise
 
 
+def setup_database(**context) -> Dict[str, Any]:
+    """
+    Setup database schema and tables.
+
+    Returns:
+        Dict with setup results
+    """
+    try:
+        print("Setting up database schema and tables...")
+
+        db_manager = SentiCheckDBManager()
+
+        # This will create tables if they don't exist
+        db_manager.create_tables()
+
+        print("✓ Database setup completed successfully")
+
+        return {
+            "status": "success",
+            "message": "Database schema and tables created successfully",
+        }
+
+    except Exception as e:
+        print(f"✗ Error setting up database: {str(e)}")
+        raise
+
+
 check_env_task = PythonOperator(
     task_id="check_environment",
     python_callable=check_environment,
+    dag=dag,
+)
+
+setup_db_task = PythonOperator(
+    task_id="setup_database",
+    python_callable=setup_database,
     dag=dag,
 )
 
@@ -167,4 +201,4 @@ cleanup_task = BashOperator(
 )
 
 
-check_env_task >> fetch_posts_task >> store_posts_task >> cleanup_task
+check_env_task >> setup_db_task >> fetch_posts_task >> store_posts_task >> cleanup_task
