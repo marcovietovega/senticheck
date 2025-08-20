@@ -17,11 +17,12 @@ load_dotenv()
 class BlueskyConnector:
     """Connector for fetching posts from Bluesky using AT Protocol."""
 
-    def __init__(self):
+    def __init__(self, posts_per_page: int = 100):
         """Initialize the Bluesky connector with environment variables."""
         self.handle = os.getenv("BLUESKY_HANDLE")
         self.app_password = os.getenv("BLUESKY_APP_PASSWORD")
         self.client = None
+        self.posts_per_page = posts_per_page  # Default to 100 for efficiency
 
         if not self.handle or not self.app_password:
             raise ValueError(
@@ -50,15 +51,16 @@ class BlueskyConnector:
             return False
 
     def fetch_posts(
-        self, keyword: str = "AI", limit: int = 50, lang: str = "en"
+        self, keyword: str = "AI", lang: str = "en", max_posts: Optional[int] = None
     ) -> List[Dict]:
         """
-        Fetch posts from Bluesky based on keyword search.
+        Fetch posts from Bluesky based on keyword search with pagination support.
 
         Args:
             keyword (str): Search keyword
-            limit (int): Maximum number of posts to fetch (1-100)
             lang (str): Language filter (e.g., 'en' for English)
+            max_posts (Optional[int]): Maximum total posts to fetch across all pages.
+                                     If None, defaults to posts_per_page (single page).
 
         Returns:
             List[Dict]: List of post dictionaries with structured data
@@ -72,43 +74,158 @@ class BlueskyConnector:
             logger.error("Keyword cannot be empty")
             return []
 
-        if not isinstance(limit, int) or limit < 1 or limit > 100:
-            logger.error("Limit must be an integer between 1 and 100")
-            return []
+        # If max_posts not specified, default to one page
+        if max_posts is None:
+            max_posts = self.posts_per_page
 
         try:
+            all_posts_data = []
+            cursor = None
+            page_count = 0
+
             logger.info(
-                f"Fetching posts with keyword: '{keyword}', limit: {limit}, language: {lang}"
+                f"Fetching posts - Keyword: '{keyword}', Language: {lang}, Target: {max_posts}, Per page: {self.posts_per_page}"
             )
 
-            params = {
-                "limit": limit,
-                "lang": lang,
-                "q": keyword.strip(),
-            }
+            while len(all_posts_data) < max_posts:
+                page_count += 1
+                # Calculate remaining posts needed for this page
+                remaining_posts = max_posts - len(all_posts_data)
+                page_limit = min(
+                    self.posts_per_page, remaining_posts, 100
+                )  # API max is 100
 
-            results = self.client.app.bsky.feed.search_posts(params)
+                params = {
+                    "limit": page_limit,
+                    "lang": lang,
+                    "q": keyword.strip(),
+                }
 
-            if not hasattr(results, "posts") or not results.posts:
-                logger.warning("No posts found for the given search criteria")
-                return []
+                # Add cursor for pagination (except first request)
+                if cursor:
+                    params["cursor"] = cursor
 
-            posts_data = []
-            for post in results.posts:
-                try:
-                    post_data = self._extract_post_data(post)
-                    if post_data:
-                        posts_data.append(post_data)
-                except Exception as e:
-                    logger.warning(f"Failed to extract data from post: {e}")
-                    continue
+                logger.info(f"Fetching page {page_count} (limit: {page_limit})")
+                results = self.client.app.bsky.feed.search_posts(params)
 
-            logger.info(f"Successfully fetched {len(posts_data)} posts")
-            return posts_data
+                if not hasattr(results, "posts") or not results.posts:
+                    logger.info(f"No more posts found (page {page_count})")
+                    break
+
+                # Process posts from this page
+                page_posts = []
+                for post in results.posts:
+                    try:
+                        post_data = self._extract_post_data(post)
+                        if post_data:
+                            page_posts.append(post_data)
+                    except Exception as e:
+                        logger.warning(f"Failed to extract data from post: {e}")
+                        continue
+
+                all_posts_data.extend(page_posts)
+                logger.info(
+                    f"Page {page_count}: fetched {len(page_posts)} posts (total: {len(all_posts_data)})"
+                )
+
+                # Check if we have a cursor for the next page
+                if hasattr(results, "cursor") and results.cursor:
+                    cursor = results.cursor
+                    logger.debug(f"Got cursor for next page: {cursor[:20]}...")
+                else:
+                    logger.info("No more pages available (no cursor returned)")
+                    break
+
+                # If we got fewer posts than requested, we've likely reached the end
+                if len(results.posts) < page_limit:
+                    logger.info("Reached end of available posts")
+                    break
+
+            logger.info(
+                f"Successfully fetched {len(all_posts_data)} posts across {page_count} pages"
+            )
+            return all_posts_data
 
         except Exception as e:
             logger.error(f"Failed to fetch posts: {e}")
             return []
+
+    def fetch_many_posts(
+        self,
+        keyword: str = "AI",
+        total_posts: int = 200,
+        lang: str = "en",
+        page_size: int = 100,
+    ) -> List[Dict]:
+        """
+        Convenience method to fetch a large number of posts using pagination.
+
+        Args:
+            keyword (str): Search keyword
+            total_posts (int): Total number of posts to fetch across all pages
+            lang (str): Language filter (e.g., 'en' for English)
+            page_size (int): Number of posts per API call (1-100, default 100 for efficiency)
+
+        Returns:
+            List[Dict]: List of post dictionaries with structured data
+
+        Example:
+            # Fetch 500 posts about AI
+            posts = connector.fetch_many_posts("AI", total_posts=500)
+        """
+        return self.fetch_posts(
+            keyword=keyword, limit=page_size, lang=lang, max_posts=total_posts
+        )
+
+    def fetch_posts_with_airflow_config(
+        self, keyword: str = "AI", lang: str = "en", **context
+    ) -> List[Dict]:
+        """
+        Fetch posts using Airflow context and variables for configuration.
+
+        This method is designed to be used in Airflow DAGs where you can
+        set variables to control the total number of posts to fetch.
+
+        Args:
+            keyword (str): Search keyword
+            lang (str): Language filter
+            **context: Airflow context (automatically passed in DAG tasks)
+
+        Returns:
+            List[Dict]: List of post dictionaries
+
+        Expected Airflow Variables:
+            - bluesky_posts_total: Total posts to fetch (default: 200)
+            - bluesky_posts_per_page: Posts per API call (default: 100)
+
+        Example in DAG:
+            fetch_task = PythonOperator(
+                task_id='fetch_bluesky_posts',
+                python_callable=connector.fetch_posts_with_airflow_config,
+                op_kwargs={'keyword': 'AI', 'lang': 'en'}
+            )
+        """
+        try:
+            from airflow.models import Variable
+
+            # Get configuration from Airflow variables with defaults
+            total_posts = int(Variable.get("bluesky_posts_total", default_var=200))
+            posts_per_page = int(
+                Variable.get("bluesky_posts_per_page", default_var=100)
+            )
+
+            logger.info(
+                f"Airflow config - Total: {total_posts}, Per page: {posts_per_page}"
+            )
+
+            return self.fetch_posts(
+                keyword=keyword, limit=posts_per_page, lang=lang, max_posts=total_posts
+            )
+
+        except ImportError:
+            # Fallback if not running in Airflow context
+            logger.warning("Not running in Airflow context, using default values")
+            return self.fetch_posts(keyword=keyword, lang=lang, max_posts=200)
 
     def _extract_post_data(self, post) -> Optional[Dict]:
         """
@@ -129,7 +246,9 @@ class BlueskyConnector:
             )
             author = (
                 post.author.display_name
-                if hasattr(post, "author") and hasattr(post.author, "display_name") and post.author.display_name.strip()
+                if hasattr(post, "author")
+                and hasattr(post.author, "display_name")
+                and post.author.display_name.strip()
                 else "Unknown"
             )
             created_at = (
