@@ -37,8 +37,8 @@ default_args = {
 dag = DAG(
     "bluesky_data_collection",
     default_args=default_args,
-    description="Daily collection of posts from Bluesky for sentiment analysis",
-    schedule="0 8 * * *",
+    description="Every 30 minutes collection of posts from Bluesky for sentiment analysis",
+    schedule="*/30 * * * *",
     catchup=False,
     tags=["bluesky", "data-collection", "senticheck"],
     max_active_runs=1,
