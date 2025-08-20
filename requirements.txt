@@ -10,7 +10,7 @@ atproto>=0.0.46
 
 # Database connectivity
 psycopg2-binary>=2.9.0
-sqlalchemy>=1.4.49,<2.0
+sqlalchemy==1.4.54
 
 # Environment variable management
 python-dotenv>=1.0.0
