@@ -96,9 +96,7 @@ app = FastAPI(
 class TextItem(BaseModel):
     """Single text item for analysis."""
 
-    text: str = Field(
-        ..., min_length=1, max_length=10000, description="Text to analyze"
-    )
+    text: str = Field(..., min_length=1, max_length=500, description="Text to analyze")
     id: Optional[str] = Field(None, description="Optional identifier for the text")
 
 
@@ -106,7 +104,7 @@ class BatchTextRequest(BaseModel):
     """Request model for batch text analysis."""
 
     texts: List[TextItem] = Field(
-        ..., min_items=1, max_items=100, description="List of texts to analyze"
+        ..., min_items=1, max_items=1000, description="List of texts to analyze"
     )
     model_name: Optional[str] = Field(
         "cardiffnlp/twitter-roberta-base-sentiment-latest",
@@ -341,5 +339,18 @@ async def get_model_info():
 
 
 if __name__ == "__main__":
+    # Import config for development server settings
+    try:
+        from config import config
+
+        host = config.host if config.host != "localhost" else "0.0.0.0"
+        port = config.port
+    except ImportError:
+        # Fallback if config import fails
+        import os
+
+        host = "0.0.0.0"
+        port = int(os.getenv("SENTIMENT_SERVICE_PORT", "8000"))
+
     # Run the service directly for development
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
+    uvicorn.run("main:app", host=host, port=port, reload=True, log_level="info")
