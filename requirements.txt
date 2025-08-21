@@ -6,7 +6,7 @@ apache-airflow>=3.0.4
 apache-airflow-providers-postgres>=6.2.0
 
 # Bluesky AT Protocol client
-atproto>=0.0.46
+atproto>=0.0.62
 
 # Database connectivity
 psycopg2-binary>=2.9.0
