@@ -95,20 +95,20 @@ def check_unanalyzed_posts(**context) -> Dict[str, Any]:
 
         db_manager = SentiCheckDBManager()
 
-        # Get batch size from Airflow Variables (with default)
-        batch_size = int(Variable.get("sentiment_batch_size", default=200))
-
-        unanalyzed_posts = db_manager.get_unanalyzed_posts(limit=batch_size)
+        # Get ALL unanalyzed posts instead of using batch size
+        print("Getting all unanalyzed posts from database...")
+        unanalyzed_posts = db_manager.get_unanalyzed_posts(
+            limit=None
+        )  # No limit = get all
         unanalyzed_count = len(unanalyzed_posts)
 
-        print(f"Found {unanalyzed_count} unanalyzed posts (batch size: {batch_size})")
+        print(f"Found {unanalyzed_count} total unanalyzed posts to process")
 
         if unanalyzed_count == 0:
             print("No posts to analyze - skipping sentiment analysis pipeline")
             return {
                 "status": "success",
                 "unanalyzed_count": 0,
-                "batch_size": batch_size,
                 "message": "No posts to analyze",
                 "timestamp": datetime.now().isoformat(),
             }
@@ -123,7 +123,6 @@ def check_unanalyzed_posts(**context) -> Dict[str, Any]:
         return {
             "status": "success",
             "unanalyzed_count": unanalyzed_count,
-            "batch_size": batch_size,
             "sample_posts": [
                 {
                     "id": post.id,
@@ -169,14 +168,13 @@ def analyze_sentiment(**context) -> Dict[str, Any]:
         db_manager = SentiCheckDBManager()
 
         # Get configuration from Airflow Variables (with defaults)
-        batch_size = int(Variable.get("sentiment_batch_size", default=500))
         model_name = Variable.get(
             "sentiment_model_name",
             default="cardiffnlp/twitter-roberta-base-sentiment-latest",
         )
 
         print(f"Configuration:")
-        print(f"  Batch size: {batch_size}")
+        print(f"  Process ALL pending posts (no batch limit)")
         print(f"  Model: {model_name}")
         print(f"  Service: Using FastAPI HTTP client (no deadlock risk)")
 
@@ -191,9 +189,11 @@ def analyze_sentiment(**context) -> Dict[str, Any]:
             except Exception as e:
                 raise Exception(f"❌ Sentiment analysis service is not available: {e}")
 
-            # Step 2: Get unanalyzed posts from database
-            print(f"📄 Fetching {batch_size} unanalyzed posts from database...")
-            cleaned_posts = db_manager.get_unanalyzed_posts(limit=batch_size)
+            # Step 2: Get ALL unanalyzed posts from database
+            print(f"📄 Fetching ALL unanalyzed posts from database...")
+            cleaned_posts = db_manager.get_unanalyzed_posts(
+                limit=None
+            )  # No limit = get all
 
             if not cleaned_posts:
                 print("No unanalyzed posts found in database")
@@ -248,7 +248,6 @@ def analyze_sentiment(**context) -> Dict[str, Any]:
         return {
             "status": "success",
             "analyzed_count": analyzed_count,
-            "batch_size": batch_size,
             "model_name": model_name,
             "service_type": "FastAPI HTTP client",
             "results_received": len(sentiment_results),
@@ -364,7 +363,6 @@ def generate_analysis_summary(**context) -> Dict[str, Any]:
             "pipeline_run": {
                 "analyzed_count": analysis_result.get("analyzed_count", 0),
                 "model_used": analysis_result.get("model_name", "unknown"),
-                "batch_size": analysis_result.get("batch_size", 0),
                 "validation_passed": validation_result.get(
                     "validation_results", {}
                 ).get("validation_passed", False),
@@ -378,7 +376,7 @@ def generate_analysis_summary(**context) -> Dict[str, Any]:
         print("=" * 60)
         print(f"Posts analyzed: {summary['pipeline_run']['analyzed_count']}")
         print(f"Model used: {summary['pipeline_run']['model_used']}")
-        print(f"Batch size: {summary['pipeline_run']['batch_size']}")
+        print(f"Processing mode: ALL pending posts (no batch limit)")
         print(
             f"Validation: {'✓ PASSED' if summary['pipeline_run']['validation_passed'] else '✗ FAILED'}"
         )
