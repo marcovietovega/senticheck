@@ -37,7 +37,7 @@ class DatabaseOperations:
         self, posts_data: List[Dict], search_keyword: str = None
     ) -> int:
         """
-        Store raw posts in the database.
+        Store raw posts in the database
 
         Args:
             posts_data: List of post dictionaries from Bluesky connector
@@ -46,11 +46,73 @@ class DatabaseOperations:
         Returns:
             int: Number of posts stored (excluding duplicates)
         """
+        if not posts_data:
+            logger.info("No posts to store")
+            return 0
+
+        # Try batch insert with PostgreSQL ON CONFLICT first
+        try:
+            return self._store_raw_posts_batch(posts_data, search_keyword)
+        except Exception as e:
+            logger.warning(
+                f"Batch insert failed, falling back to individual inserts: {e}"
+            )
+            return self._store_raw_posts_individual(posts_data, search_keyword)
+
+    def _store_raw_posts_batch(
+        self, posts_data: List[Dict], search_keyword: str = None
+    ) -> int:
+        """
+        Batch insert posts using PostgreSQL ON CONFLICT DO NOTHING.
+        """
+        from sqlalchemy.dialects.postgresql import insert
+
         stored_count = 0
 
         with self.db_connection.get_session() as session:
+            # Prepare data for batch insert
+            insert_data = []
             for post_data in posts_data:
-                try:
+                insert_data.append(
+                    {
+                        "post_uri": post_data.get("post_uri", ""),
+                        "cid": post_data.get("cid", ""),
+                        "text": post_data.get("text", ""),
+                        "author": post_data.get("author") or "Unknown",
+                        "author_handle": post_data.get("author_handle", ""),
+                        "created_at": post_data.get("timestamp")
+                        or post_data.get("fetched_at"),
+                        "fetched_at": post_data.get("fetched_at"),
+                        "search_keyword": search_keyword,
+                        "is_processed": False,
+                    }
+                )
+
+            # Use PostgreSQL's ON CONFLICT DO NOTHING to handle duplicates
+            stmt = insert(RawPost).values(insert_data)
+            stmt = stmt.on_conflict_do_nothing(index_elements=["post_uri"])
+
+            result = session.execute(stmt)
+            stored_count = result.rowcount
+
+        logger.info(
+            f"Batch stored {stored_count} new posts out of {len(posts_data)} total"
+        )
+        return stored_count
+
+    def _store_raw_posts_individual(
+        self, posts_data: List[Dict], search_keyword: str = None
+    ) -> int:
+        """
+        Fallback method: Store posts individually with duplicate checking.
+        """
+        stored_count = 0
+        skipped_count = 0
+
+        for post_data in posts_data:
+            try:
+                with self.db_connection.get_session() as session:
+                    # Check if post already exists
                     existing_post = (
                         session.query(RawPost)
                         .filter_by(post_uri=post_data.get("post_uri", ""))
@@ -61,8 +123,10 @@ class DatabaseOperations:
                         logger.debug(
                             f"Post already exists: {post_data.get('post_uri', '')}"
                         )
+                        skipped_count += 1
                         continue
 
+                    # Create new post
                     raw_post = RawPost(
                         post_uri=post_data.get("post_uri", ""),
                         cid=post_data.get("cid", ""),
@@ -76,13 +140,18 @@ class DatabaseOperations:
                     )
 
                     session.add(raw_post)
+                    # Session commits automatically when exiting the context
                     stored_count += 1
 
-                except Exception as e:
-                    logger.error(f"Failed to store post: {e}")
-                    continue
+            except Exception as e:
+                logger.warning(
+                    f"Failed to store post {post_data.get('post_uri', 'unknown')}: {e}"
+                )
+                continue
 
-        logger.info(f"Stored {stored_count} new posts out of {len(posts_data)} total")
+        logger.info(
+            f"Individual stored {stored_count} new posts, skipped {skipped_count} duplicates out of {len(posts_data)} total"
+        )
         return stored_count
 
     def get_unprocessed_posts(self, limit: int = 100) -> List[RawPost]:

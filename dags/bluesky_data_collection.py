@@ -37,8 +37,8 @@ default_args = {
 dag = DAG(
     "bluesky_data_collection",
     default_args=default_args,
-    description="Daily collection of posts from Bluesky for sentiment analysis",
-    schedule="0 8 * * *",
+    description="Every 30 minutes collection of posts from Bluesky for sentiment analysis",
+    schedule="*/30 * * * *",
     catchup=False,
     tags=["bluesky", "data-collection", "senticheck"],
     max_active_runs=1,
@@ -72,26 +72,35 @@ def check_environment(**context) -> Dict[str, Any]:
 
 def fetch_bluesky_posts(**context) -> Dict[str, Any]:
     """
-    Fetch recent posts from Bluesky.
+    Fetch recent posts from Bluesky using pagination.
 
     Returns:
         Dict with fetching results
     """
-    # Get configuration from Airflow Variables (with defaults)
-    max_posts = int(Variable.get("bluesky_max_posts", default=100))
-
-    print(f"Starting Bluesky data collection (max posts: {max_posts})")
-
     try:
+        # Get configuration from Airflow Variables
+        total_posts = int(Variable.get("bluesky_max_posts", default=100))
+        search_keyword = Variable.get("bluesky_search_keyword", default="AI")
+
+        print(f"Starting Bluesky data collection:")
+        print(f"  - Keyword: {search_keyword}")
+        print(f"  - Total posts target: {total_posts}")
+        print(f"  - Posts per page: 100 (default)")
+
         connector = BlueskyConnector()
         if not connector.connect():
             raise Exception("Failed to connect to Bluesky")
 
         print("✓ Connected to Bluesky successfully")
 
-        posts = connector.fetch_posts(keyword="AI", limit=max_posts, lang="en")
-        print(f"✓ Fetched {len(posts)} posts from Bluesky")
+        # Pass parameters explicitly to the connector
+        posts = connector.fetch_posts(
+            keyword=search_keyword, lang="en", max_posts=total_posts
+        )
 
+        print(f"✓ Fetched {len(posts)} posts from Bluesky (requested: {total_posts})")
+
+        # Convert datetime objects to ISO strings for XCom serialization
         for post in posts:
             if post.get("timestamp") and hasattr(post["timestamp"], "isoformat"):
                 post["timestamp"] = post["timestamp"].isoformat()
@@ -114,19 +123,22 @@ def store_posts_in_database(**context) -> Dict[str, Any]:
     Returns:
         Dict with storage results
     """
-    # Pull posts from the previous task - no key needed, just task_ids
+    # Pull posts from the previous task
     posts = context["ti"].xcom_pull(task_ids="fetch_posts")
 
     if not posts:
         print("No posts to store")
         return {"status": "success", "stored_count": 0, "message": "No posts to store"}
 
-    print(f"Storing {len(posts)} posts in database")
+    # Get the search keyword used for fetching
+    search_keyword = Variable.get("bluesky_search_keyword", default="AI")
+
+    print(f"Storing {len(posts)} posts in database (keyword: {search_keyword})")
 
     try:
         db_manager = SentiCheckDBManager()
 
-        stored_count = db_manager.store_raw_posts(posts, search_keyword="AI")
+        stored_count = db_manager.store_raw_posts(posts, search_keyword=search_keyword)
 
         print(f"✓ Successfully stored {stored_count} posts in database")
 
@@ -135,6 +147,7 @@ def store_posts_in_database(**context) -> Dict[str, Any]:
             "total_posts": len(posts),
             "stored_count": stored_count,
             "skipped_count": len(posts) - stored_count,
+            "search_keyword": search_keyword,
             "timestamp": datetime.now().isoformat(),
         }
 
