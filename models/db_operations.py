@@ -1,7 +1,7 @@
 import logging
 import sys
 import os
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
 
 if __name__ == "__main__":
@@ -154,20 +154,21 @@ class DatabaseOperations:
         )
         return stored_count
 
-    def get_unprocessed_posts(self, limit: int = 100) -> List[RawPost]:
+    def get_unprocessed_posts(self, limit: Optional[int] = 100) -> List[RawPost]:
         """
         Get raw posts that haven't been cleaned yet.
 
         Args:
-            limit: Maximum number of posts to return
+            limit: Maximum number of posts to return. If None, returns all unprocessed posts.
 
         Returns:
             List[RawPost]: List of unprocessed raw posts
         """
         with self.db_connection.get_session() as session:
-            posts = (
-                session.query(RawPost).filter_by(is_processed=False).limit(limit).all()
-            )
+            query = session.query(RawPost).filter_by(is_processed=False)
+            if limit is not None:
+                query = query.limit(limit)
+            posts = query.all()
             session.expunge_all()
             return posts
 
@@ -221,23 +222,21 @@ class DatabaseOperations:
             logger.error(f"Failed to store cleaned post: {e}")
             return None
 
-    def get_unanalyzed_posts(self, limit: int = 100) -> List[CleanedPost]:
+    def get_unanalyzed_posts(self, limit: Optional[int] = 100) -> List[CleanedPost]:
         """
         Get cleaned posts that haven't been analyzed for sentiment yet.
 
         Args:
-            limit: Maximum number of posts to return
+            limit: Maximum number of posts to return. If None, returns all unanalyzed posts.
 
         Returns:
             List[CleanedPost]: List of unanalyzed cleaned posts
         """
         with self.db_connection.get_session() as session:
-            posts = (
-                session.query(CleanedPost)
-                .filter_by(is_analyzed=False)
-                .limit(limit)
-                .all()
-            )
+            query = session.query(CleanedPost).filter_by(is_analyzed=False)
+            if limit is not None:
+                query = query.limit(limit)
+            posts = query.all()
 
             session.expunge_all()
             return posts
