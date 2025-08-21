@@ -146,6 +146,7 @@ class SentiCheckDBManager:
             for raw_post in raw_posts:
                 try:
                     post_data = {
+                        "id": raw_post.id,  # Add post ID for logging
                         "text": raw_post.text,
                         "author": raw_post.author,
                         "created_at": (
