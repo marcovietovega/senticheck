@@ -89,20 +89,20 @@ def check_unprocessed_posts(**context) -> Dict[str, Any]:
 
         db_manager = SentiCheckDBManager()
 
-        # Get batch size from Airflow Variables (with default)
-        batch_size = int(Variable.get("cleaning_batch_size", default=500))
-
-        unprocessed_posts = db_manager.get_unprocessed_posts(limit=batch_size)
+        # Get ALL unprocessed posts instead of using batch size
+        print("Getting all unprocessed posts from database...")
+        unprocessed_posts = db_manager.get_unprocessed_posts(
+            limit=None
+        )  # No limit = get all
         unprocessed_count = len(unprocessed_posts)
 
-        print(f"Found {unprocessed_count} unprocessed posts (batch size: {batch_size})")
+        print(f"Found {unprocessed_count} total unprocessed posts to clean")
 
         if unprocessed_count == 0:
             print("No posts to process - skipping cleaning pipeline")
             return {
                 "status": "success",
                 "unprocessed_count": 0,
-                "batch_size": batch_size,
                 "message": "No posts to process",
                 "timestamp": datetime.now().isoformat(),
             }
@@ -117,7 +117,6 @@ def check_unprocessed_posts(**context) -> Dict[str, Any]:
         return {
             "status": "success",
             "unprocessed_count": unprocessed_count,
-            "batch_size": batch_size,
             "sample_posts": [
                 {
                     "id": post.id,
@@ -154,7 +153,6 @@ def clean_posts(**context) -> Dict[str, Any]:
         db_manager = SentiCheckDBManager()
 
         # Get configuration from Airflow Variables (with defaults)
-        batch_size = int(Variable.get("cleaning_batch_size", default=500))
         preserve_hashtags = (
             Variable.get("preserve_hashtags", default="false").lower() == "true"
         )
@@ -167,19 +165,19 @@ def clean_posts(**context) -> Dict[str, Any]:
         min_content_words = int(Variable.get("min_content_words", default="3"))
 
         print(f"Configuration:")
-        print(f"  Batch size: {batch_size}")
+        print(f"  Process ALL pending posts (no batch limit)")
         print(f"  Preserve hashtags: {preserve_hashtags}")
         print(f"  Preserve mentions: {preserve_mentions}")
         print(f"  Filter hashtag-only posts: {filter_hashtag_only}")
         print(f"  Minimum content words: {min_content_words}")
 
-        # Process posts
+        # Process ALL posts (no limit)
         processed_count = db_manager.process_raw_posts_to_cleaned(
             preserve_hashtags=preserve_hashtags,
             preserve_mentions=preserve_mentions,
             filter_hashtag_only=filter_hashtag_only,
             min_content_words=min_content_words,
-            limit=batch_size,
+            limit=None,  # Process ALL unprocessed posts
         )
 
         print(f"✓ Successfully cleaned {processed_count} posts")
@@ -190,7 +188,6 @@ def clean_posts(**context) -> Dict[str, Any]:
         return {
             "status": "success",
             "cleaned_count": processed_count,
-            "batch_size": batch_size,
             "preserve_hashtags": preserve_hashtags,
             "preserve_mentions": preserve_mentions,
             "filter_hashtag_only": filter_hashtag_only,
