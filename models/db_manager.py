@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
 try:
     from .db_operations import get_db_operations
-    from .database import RawPost, CleanedPost, SentimentAnalysis
+    from .database import RawPost, CleanedPost
 except ImportError:
     from db_operations import get_db_operations
     from database import RawPost, CleanedPost, SentimentAnalysis
@@ -114,6 +114,8 @@ class SentiCheckDBManager:
         self,
         preserve_hashtags: bool = False,
         preserve_mentions: bool = False,
+        filter_hashtag_only: bool = True,
+        min_content_words: int = 3,
         limit: int = 100,
     ) -> int:
         """
@@ -122,6 +124,8 @@ class SentiCheckDBManager:
         Args:
             preserve_hashtags: Whether to keep hashtags during cleaning
             preserve_mentions: Whether to keep mentions during cleaning
+            filter_hashtag_only: Whether to filter posts that are mostly hashtags
+            min_content_words: Minimum number of content words required
             limit: Maximum number of posts to process
 
         Returns:
@@ -137,6 +141,7 @@ class SentiCheckDBManager:
 
             cleaner = TextCleaner()
             processed_count = 0
+            filtered_count = 0
 
             for raw_post in raw_posts:
                 try:
@@ -154,16 +159,41 @@ class SentiCheckDBManager:
                         post_data,
                         preserve_hashtags=preserve_hashtags,
                         preserve_mentions=preserve_mentions,
+                        filter_hashtag_only=filter_hashtag_only,
+                        min_content_words=min_content_words,
                     )
 
+                    # Check if post was filtered out (returns None)
+                    if cleaned_post is None:
+                        filtered_count += 1
+                        # Still mark the raw post as processed even if filtered
+                        with self.db_ops.db_connection.get_session() as session:
+                            raw_post_obj = (
+                                session.query(RawPost).filter_by(id=raw_post.id).first()
+                            )
+                            if raw_post_obj:
+                                raw_post_obj.is_processed = True
+                        continue
+
                     if cleaned_post.get("text", "").strip():
+                        # Add filtering metadata
+                        cleaning_metadata = {
+                            "cleaned_at": datetime.now().isoformat(),
+                            "filter_hashtag_only": filter_hashtag_only,
+                            "min_content_words": min_content_words,
+                        }
+
+                        # Include content analysis if available
+                        if "content_analysis" in cleaned_post:
+                            cleaning_metadata["content_analysis"] = cleaned_post[
+                                "content_analysis"
+                            ]
+
                         self.store_cleaned_post(
                             raw_post_id=raw_post.id,
                             cleaned_text=cleaned_post["text"],
                             original_text=cleaned_post["original_text"],
-                            cleaning_metadata={
-                                "cleaned_at": datetime.now().isoformat()
-                            },
+                            cleaning_metadata=cleaning_metadata,
                             preserve_hashtags=preserve_hashtags,
                             preserve_mentions=preserve_mentions,
                         )
@@ -178,6 +208,10 @@ class SentiCheckDBManager:
                     continue
 
             logger.info(f"Processed {processed_count} raw posts to cleaned posts")
+            if filtered_count > 0:
+                logger.info(
+                    f"Filtered out {filtered_count} hashtag-only or low-content posts"
+                )
             return processed_count
 
         except ImportError:
@@ -278,6 +312,8 @@ class SentiCheckDBManager:
         search_keyword: str = None,
         preserve_hashtags: bool = False,
         preserve_mentions: bool = False,
+        filter_hashtag_only: bool = True,
+        min_content_words: int = 3,
         model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest",
     ) -> Dict[str, int]:
         """
@@ -288,6 +324,8 @@ class SentiCheckDBManager:
             search_keyword: Keyword used to search for posts
             preserve_hashtags: Whether to keep hashtags during cleaning
             preserve_mentions: Whether to keep mentions during cleaning
+            filter_hashtag_only: Whether to filter posts that are mostly hashtags
+            min_content_words: Minimum number of content words required
             model_name: Sentiment analysis model name
 
         Returns:
@@ -312,6 +350,8 @@ class SentiCheckDBManager:
             results["posts_cleaned"] = self.process_raw_posts_to_cleaned(
                 preserve_hashtags=preserve_hashtags,
                 preserve_mentions=preserve_mentions,
+                filter_hashtag_only=filter_hashtag_only,
+                min_content_words=min_content_words,
                 limit=len(posts_data),
             )
 
