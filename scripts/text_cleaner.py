@@ -157,15 +157,17 @@ class TextCleaner:
 
             # Filter hashtag-only posts if enabled
             if filter_hashtag_only and content_analysis["is_hashtag_only"]:
+                post_id = post_data.get("id", "unknown")
                 logger.info(
-                    f"Filtered hashtag-only post: {content_analysis['hashtag_count']} hashtags, {content_analysis['content_words']} content words"
+                    f"Filtered hashtag-only post (ID: {post_id}): {content_analysis['hashtag_count']} hashtags, {content_analysis['content_words']} content words"
                 )
                 return None
 
             # Filter posts with insufficient content
             if content_analysis["content_words"] < min_content_words:
+                post_id = post_data.get("id", "unknown")
                 logger.info(
-                    f"Filtered post with insufficient content: {content_analysis['content_words']} words (min: {min_content_words})"
+                    f"Filtered post with insufficient content (ID: {post_id}): {content_analysis['content_words']} words (min: {min_content_words})"
                 )
                 return None
 
