@@ -161,16 +161,24 @@ def clean_posts(**context) -> Dict[str, Any]:
         preserve_mentions = (
             Variable.get("preserve_mentions", default="false").lower() == "true"
         )
+        filter_hashtag_only = (
+            Variable.get("filter_hashtag_only", default="true").lower() == "true"
+        )
+        min_content_words = int(Variable.get("min_content_words", default="3"))
 
         print(f"Configuration:")
         print(f"  Batch size: {batch_size}")
         print(f"  Preserve hashtags: {preserve_hashtags}")
         print(f"  Preserve mentions: {preserve_mentions}")
+        print(f"  Filter hashtag-only posts: {filter_hashtag_only}")
+        print(f"  Minimum content words: {min_content_words}")
 
         # Process posts
         processed_count = db_manager.process_raw_posts_to_cleaned(
             preserve_hashtags=preserve_hashtags,
             preserve_mentions=preserve_mentions,
+            filter_hashtag_only=filter_hashtag_only,
+            min_content_words=min_content_words,
             limit=batch_size,
         )
 
@@ -185,6 +193,8 @@ def clean_posts(**context) -> Dict[str, Any]:
             "batch_size": batch_size,
             "preserve_hashtags": preserve_hashtags,
             "preserve_mentions": preserve_mentions,
+            "filter_hashtag_only": filter_hashtag_only,
+            "min_content_words": min_content_words,
             "updated_stats": updated_stats,
             "timestamp": datetime.now().isoformat(),
         }
