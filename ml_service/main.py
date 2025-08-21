@@ -104,7 +104,7 @@ class BatchTextRequest(BaseModel):
     """Request model for batch text analysis."""
 
     texts: List[TextItem] = Field(
-        ..., min_items=1, max_items=1000, description="List of texts to analyze"
+        ..., min_items=1, description="List of texts to analyze (no maximum limit)"
     )
     model_name: Optional[str] = Field(
         "cardiffnlp/twitter-roberta-base-sentiment-latest",
@@ -255,10 +255,22 @@ async def analyze_batch_texts(request: BatchTextRequest):
     try:
         start_time = time.time()
         results = []
+        batch_size = len(request.texts)
 
-        logger.info(f"Processing batch of {len(request.texts)} texts...")
+        logger.info(f"Processing batch of {batch_size} texts...")
 
-        for text_item in request.texts:
+        # Add warning for very large batches
+        if batch_size > 5000:
+            logger.warning(
+                f"Processing very large batch ({batch_size} items) - this may take several minutes"
+            )
+
+        # Progress tracking for large batches
+        progress_interval = max(
+            100, batch_size // 10
+        )  # Report progress every 10% or every 100 items
+
+        for idx, text_item in enumerate(request.texts, 1):
             try:
                 item_start_time = time.time()
 
@@ -280,6 +292,15 @@ async def analyze_batch_texts(request: BatchTextRequest):
                             processing_time_ms=item_processing_time,
                         )
                     )
+
+                    # Log progress for large batches
+                    if batch_size > 1000 and idx % progress_interval == 0:
+                        elapsed_time = time.time() - start_time
+                        progress_pct = (idx / batch_size) * 100
+                        logger.info(
+                            f"Progress: {idx}/{batch_size} ({progress_pct:.1f}%) processed in {elapsed_time:.1f}s"
+                        )
+
                 else:
                     logger.warning(f"Failed to analyze text: {text_item.text[:50]}...")
 
