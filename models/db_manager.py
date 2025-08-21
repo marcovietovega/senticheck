@@ -56,7 +56,7 @@ class SentiCheckDBManager:
         """Store raw posts from social media platforms."""
         return self.db_ops.store_raw_posts(posts_data, search_keyword)
 
-    def get_unprocessed_posts(self, limit: int = 100) -> List[RawPost]:
+    def get_unprocessed_posts(self, limit: Optional[int] = 100) -> List[RawPost]:
         """Get raw posts that haven't been cleaned yet."""
         return self.db_ops.get_unprocessed_posts(limit)
 
@@ -79,7 +79,7 @@ class SentiCheckDBManager:
             preserve_mentions=preserve_mentions,
         )
 
-    def get_unanalyzed_posts(self, limit: int = 100) -> List[CleanedPost]:
+    def get_unanalyzed_posts(self, limit: Optional[int] = 100) -> List[CleanedPost]:
         """Get cleaned posts that haven't been analyzed for sentiment yet."""
         return self.db_ops.get_unanalyzed_posts(limit)
 
@@ -116,7 +116,7 @@ class SentiCheckDBManager:
         preserve_mentions: bool = False,
         filter_hashtag_only: bool = True,
         min_content_words: int = 3,
-        limit: int = 100,
+        limit: Optional[int] = 100,
     ) -> int:
         """
         Process raw posts through text cleaning pipeline.
@@ -126,7 +126,7 @@ class SentiCheckDBManager:
             preserve_mentions: Whether to keep mentions during cleaning
             filter_hashtag_only: Whether to filter posts that are mostly hashtags
             min_content_words: Minimum number of content words required
-            limit: Maximum number of posts to process
+            limit: Maximum number of posts to process. If None, processes all unprocessed posts.
 
         Returns:
             int: Number of posts processed
