@@ -11,7 +11,7 @@ sys.path.insert(0, str(parent_dir))
 
 
 from dashboard.charts import render_sentiment_over_time_chart
-from dashboard.styles import apply_clean_styles, apply_dropdown_styles
+from dashboard.styles import apply_styles, apply_dropdown_styles
 from dashboard.data_service import get_dashboard_data_service
 
 
@@ -195,7 +195,7 @@ def render_chart_section():
 def main():
     """Main dashboard application."""
     configure_page()
-    apply_clean_styles()
+    apply_styles()
     apply_dropdown_styles()
 
     render_page_title()

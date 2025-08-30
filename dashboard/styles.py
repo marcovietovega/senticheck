@@ -3,7 +3,7 @@
 import streamlit as st
 
 
-def apply_clean_styles():
+def apply_styles():
     """Apply styling to the dashboard"""
     st.markdown(
         """
