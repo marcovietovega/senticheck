@@ -1,26 +1,21 @@
+from datetime import datetime, timedelta, timezone
 import logging
 import sys
 import os
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy import text, func
 
 
 if __name__ == "__main__":
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-try:
-    from .database import (
-        RawPost,
-        CleanedPost,
-        SentimentAnalysis,
-    )
-    from .db_connection import get_db_connection
-except ImportError:
-    from database import (
-        RawPost,
-        CleanedPost,
-        SentimentAnalysis,
-    )
-    from db_connection import get_db_connection
+
+from .database import (
+    RawPost,
+    CleanedPost,
+    SentimentAnalysis,
+)
+from .db_connection import get_db_connection
 
 
 logger = logging.getLogger(__name__)
@@ -357,8 +352,7 @@ class DatabaseOperations:
         return stored_count
 
     def get_database_stats(self) -> Dict[str, Any]:
-        """
-        Get database statistics.
+        """Get database statistics.
 
         Returns:
             Dict: Database statistics
@@ -387,6 +381,88 @@ class DatabaseOperations:
         except Exception as e:
             logger.error(f"Failed to get database stats: {e}")
             return {}
+
+    def get_sentiment_distribution(self) -> List[Tuple[str, int]]:
+        """
+        Get sentiment distribution.
+
+        Returns:
+            List[Tuple[str, int]]: A list of tuples containing sentiment labels and their counts.
+        """
+        with self.db_connection.get_session() as session:
+            result = session.execute(text("SELECT * FROM get_sentiment_distribution()"))
+            return [(row.sentiment_label, row.count) for row in result]
+
+    def get_sentiment_over_time(self, days: int) -> List[Dict[str, Any]]:
+        """
+        Get sentiment over time.
+
+        Args:
+            days (int): The number of days to look back.
+        Returns:
+            List[Dict[str, Any]]: A list of dictionaries containing sentiment data over time.
+        """
+        with self.db_connection.get_session() as session:
+            result = session.execute(
+                text("SELECT * FROM get_sentiment_over_time(:days)"), {"days": days}
+            )
+            return [
+                {
+                    "date": r.date,
+                    "positive": r.positive,
+                    "negative": r.negative,
+                    "neutral": r.neutral,
+                }
+                for r in result
+            ]
+
+    def get_average_confidence(self) -> float:
+        """
+        Get average confidence.
+
+        Returns:
+            float: The average confidence score.
+        """
+        with self.db_connection.get_session() as session:
+            result = session.execute(text("SELECT get_average_confidence()"))
+            return result.scalar() or 0.0
+
+    def get_today_posts_count(self) -> int:
+        """
+        Get today's post count.
+
+        Returns:
+            int: The count of today's posts.
+        """
+        with self.db_connection.get_session() as session:
+            result = session.execute(text("SELECT get_today_posts_count()"))
+            return result.scalar() or 0
+
+    def get_posts_by_date_range(self, days: int) -> List[Tuple[str, int]]:
+        """
+        Get post counts by date for the last N days.
+
+        Args:
+            days (int): The number of days to look back.
+        Returns:
+            List[Tuple[str, int]]: A list of tuples containing the date and post count.
+        """
+        with self.db_connection.get_session() as session:
+            end_date = datetime.now(timezone.utc).date()
+            start_date = end_date - timedelta(days=days)
+
+            result = (
+                session.query(
+                    func.date(RawPost.created_at).label("date"),
+                    func.count(RawPost.id).label("count"),
+                )
+                .filter(func.date(RawPost.created_at) >= start_date)
+                .group_by(func.date(RawPost.created_at))
+                .order_by(func.date(RawPost.created_at))
+                .all()
+            )
+
+            return [(str(row.date), row.count) for row in result]
 
 
 db_operations = None
