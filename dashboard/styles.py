@@ -1,28 +1,14 @@
 #!/usr/bin/env python3
-"""
-Dashboard Styling Module
-
-Clean, minimal styles for the SentiCheck dashboard following the UI Style Guide.
-"""
 
 import streamlit as st
 
 
 def apply_clean_styles():
-    """Apply minimal, clean styling to the dashboard"""
+    """Apply styling to the dashboard"""
     st.markdown(
         """
         <style>
-        :root {
-            color-scheme: light !important;
-        }
-        
-        .stApp {
-            background-color: #ffffff;
-            color: #1f2937;
-        }
 
-        /* === METRIC CARDS === */
         .metric-card {
             background-color: #ffffff;
             border: 1px solid #e5e7eb;
