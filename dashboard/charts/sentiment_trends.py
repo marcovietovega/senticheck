@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Renders the sentiment over time chart for the dashboard.
-"""
+
 
 import streamlit as st
 import plotly.graph_objects as go
@@ -11,6 +9,8 @@ from pathlib import Path
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
+
+from dashboard.data_service import get_dashboard_data_service
 
 
 def render_sentiment_over_time_chart():
@@ -25,17 +25,15 @@ def render_sentiment_over_time_chart():
     with col2:
         time_range = st.selectbox(
             "Time range:",
-            options=["7 days", "30 days", "90 days"],
+            options=["7 days", "15 days", "30 days"],
             index=0,
             key="time_range_selector",
         )
 
     try:
-        from dashboard.data_service import get_dashboard_data_service
-
         data_service = get_dashboard_data_service()
 
-        days_map = {"7 days": 7, "30 days": 30, "90 days": 90}
+        days_map = {"7 days": 7, "15 days": 15, "30 days": 30}
         days = days_map[time_range]
 
         chart_data = data_service.get_sentiment_over_time(days=days)
@@ -43,9 +41,9 @@ def render_sentiment_over_time_chart():
         fig = go.Figure()
 
         colors = {
-            "Positive": "#10b981",  # Green
-            "Negative": "#ef4444",  # Red
-            "Neutral": "#6b7280",  # Gray
+            "Positive": "#10b981",
+            "Negative": "#ef4444",
+            "Neutral": "#6b7280",
         }
 
         for sentiment in ["Positive", "Negative", "Neutral"]:
@@ -76,7 +74,7 @@ def render_sentiment_over_time_chart():
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
-                y=-0.35,
+                y=-0.4,
                 xanchor="center",
                 x=0.5,
                 bgcolor="rgba(255,255,255,0.9)",
@@ -107,4 +105,3 @@ def render_sentiment_over_time_chart():
 
     except Exception as e:
         st.error(f"Error loading chart data: {e}")
-        st.info("Please check the database connection and try refreshing the page.")
