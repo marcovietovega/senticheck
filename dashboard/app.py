@@ -16,13 +16,13 @@ from dashboard.data_service import get_dashboard_data_service
 
 
 def configure_page():
-    """Configure Streamlit page settings following the style guide."""
+    """Configure Streamlit page settings."""
     st.set_page_config(
         page_title="SentiCheck",
         page_icon="📊",
         layout="wide",
         initial_sidebar_state="collapsed",
-        menu_items={"About": "SentiCheck - Modern sentiment analysis dashboard"},
+        menu_items={"About": "SentiCheck - Sentiment analysis dashboard"},
     )
 
 
@@ -30,7 +30,7 @@ def render_page_title():
     """Render the main page title"""
     st.markdown(
         """
-        <div style="text-align: center; margin-bottom: 32px;">
+        <div style="text-align: center; margin-bottom: 32px;"> #TODO: Check if these styles can be moved to styles.py
             <h1 style="font-size: 48px; font-weight: 600; margin-bottom: 8px; color: #111827;">
                 📊 SentiCheck
             </h1>
@@ -51,7 +51,7 @@ def render_metric_card(
     help_text: Optional[str] = None,
 ):
     """
-    Render a KPI metric card following the style guide.
+    Render a KPI metric card.
 
     Args:
         title: The metric label
