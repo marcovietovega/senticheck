@@ -1,11 +1,8 @@
 """
-Bluesky Data Collection DAG - SentiCheck Project
+Bluesky Data Collection DAG
 
-This DAG fetches recent posts from Bluesky and stores them in the database.
-It runs every 30 minutes to collect fresh posts for sentiment analysis.
-
-Configuration (Airflow Variables):
-- bluesky_search_keyword: Search keyword (default: "AI")
+Fetches recent posts from Bluesky and stores them in the database.
+Runs every 30 minutes to collect fresh posts for sentiment analysis.
 """
 
 import os
@@ -29,7 +26,7 @@ from models.db_manager import SentiCheckDBManager
 default_args = {
     "owner": "senticheck",
     "depends_on_past": False,
-    "start_date": datetime(2025, 8, 20),  # Start from yesterday for daily collection
+    "start_date": datetime(2025, 8, 20),
     "email_on_failure": False,
     "email_on_retry": False,
     "retries": 2,
@@ -40,8 +37,8 @@ default_args = {
 dag = DAG(
     "bluesky_data_collection",
     default_args=default_args,
-    description="Collection of posts from Bluesky every 30 minutes for sentiment analysis",
-    schedule="*/30 * * * *",  # Run every 30 minutes
+    description="Collects posts from Bluesky every 30 minutes for sentiment analysis",
+    schedule="*/30 * * * *",
     catchup=False,
     tags=["bluesky", "data-collection", "senticheck"],
     max_active_runs=1,
@@ -49,9 +46,8 @@ dag = DAG(
 
 
 def check_environment(**context) -> Dict[str, Any]:
-    """
-    Check that all required environment variables are set.
-
+    """Check that all required environment variables are set.
+    
     Returns:
         Dict with environment check results
     """
@@ -65,7 +61,7 @@ def check_environment(**context) -> Dict[str, Any]:
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {missing_vars}")
 
-    print("✓ All required environment variables are set")
+    print("All required environment variables are set")
     return {
         "status": "success",
         "checked_vars": required_vars,
@@ -74,39 +70,60 @@ def check_environment(**context) -> Dict[str, Any]:
 
 
 def fetch_bluesky_posts(**context) -> Dict[str, Any]:
-    """
-    Fetch recent posts from Bluesky (no date filtering - just get latest posts).
-
+    """Fetch recent posts from Bluesky.
+    
     Returns:
-        Dict with fetching results
+        Dict with fetched posts and metadata
     """
+    import json
+    
     try:
-        # Get configuration from Airflow Variables
-        search_keyword = Variable.get("bluesky_search_keyword", default="AI")
+        # Get keywords from Airflow Variables
+        keywords_var = Variable.get("bluesky_search_keywords", default="AI")
+        
+        # Handle both string and JSON array formats
+        if isinstance(keywords_var, str):
+            try:
+                keywords = json.loads(keywords_var) if keywords_var.startswith('[') else [keywords_var]
+            except json.JSONDecodeError:
+                keywords = [keywords_var]
+        else:
+            keywords = keywords_var if isinstance(keywords_var, list) else [keywords_var]
 
         print(f"Starting Bluesky data collection:")
         print(
             f"  - Execution date: {context.get('execution_date', datetime.now()).strftime('%Y-%m-%d %H:%M')}"
         )
-        print(f"  - Keyword: {search_keyword}")
-        print(f"  - Mode: Recent posts (no date filtering)")
+        print(f"  - Keywords: {keywords}")
+        print(f"  - Mode: Recent posts")
 
         connector = BlueskyConnector()
         if not connector.connect():
             raise Exception("Failed to connect to Bluesky")
 
-        print("✓ Connected to Bluesky successfully")
+        print("Connected to Bluesky successfully")
 
-        # Fetch recent posts without date filtering
-        posts = connector.fetch_posts(
-            keyword=search_keyword,
-            lang="en",
-        )
+        # Fetch posts for each keyword
+        all_posts = []
+        for keyword in keywords:
+            print(f"Fetching posts for keyword: '{keyword}'")
+            
+            posts = connector.fetch_posts(
+                keyword=keyword,
+                lang="en",
+            )
+            
+            # Tag each post with the keyword that found it
+            for post in posts:
+                post['search_keyword'] = keyword
+            
+            all_posts.extend(posts)
+            print(f"Fetched {len(posts)} posts for keyword '{keyword}'")
 
-        print(f"✓ Fetched {len(posts)} recent posts from Bluesky")
+        print(f"Total fetched {len(all_posts)} posts from Bluesky across {len(keywords)} keywords")
 
-        # Convert datetime objects to ISO strings for XCom serialization
-        for post in posts:
+        # Convert datetime objects to ISO strings
+        for post in all_posts:
             if post.get("timestamp") and hasattr(post["timestamp"], "isoformat"):
                 post["timestamp"] = post["timestamp"].isoformat()
             if post.get("fetched_at") and hasattr(post["fetched_at"], "isoformat"):
@@ -115,24 +132,24 @@ def fetch_bluesky_posts(**context) -> Dict[str, Any]:
         connector.disconnect()
 
         return {
-            "posts": posts,
-            "total_fetched": len(posts),
+            "posts": all_posts,
+            "total_fetched": len(all_posts),
+            "keywords_used": keywords,
             "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
-        print(f"✗ Error fetching posts: {e}")
+        print(f"Error fetching posts: {e}")
         raise
 
 
 def store_posts_in_database(**context) -> Dict[str, Any]:
-    """
-    Store fetched posts in the database.
-
+    """Store fetched posts in the database.
+    
     Returns:
         Dict with storage results
     """
-    # Pull data from the previous task
+    # Get data from previous task
     fetch_result = context["ti"].xcom_pull(task_ids="fetch_posts")
 
     if not fetch_result or not fetch_result.get("posts"):
@@ -141,40 +158,38 @@ def store_posts_in_database(**context) -> Dict[str, Any]:
 
     posts = fetch_result["posts"]
     date_info = fetch_result.get("date_range", {})
-
-    # Get the search keyword used for fetching
-    search_keyword = Variable.get("bluesky_search_keyword", default="AI")
+    keywords_used = fetch_result.get("keywords_used", ["AI"])
 
     print(
-        f"Storing {len(posts)} posts from {date_info.get('date_str', 'unknown date')} in database (keyword: {search_keyword})"
+        f"Storing {len(posts)} posts from {date_info.get('date_str', 'recent collection')} in database (keywords: {keywords_used})"
     )
 
     try:
         db_manager = SentiCheckDBManager()
 
-        stored_count = db_manager.store_raw_posts(posts, search_keyword=search_keyword)
+        # Posts already have search_keyword in each post
+        stored_count = db_manager.store_raw_posts(posts)
 
-        print(f"✓ Successfully stored {stored_count} posts in database")
+        print(f"Successfully stored {stored_count} posts in database")
 
         return {
             "status": "success",
             "total_posts": len(posts),
             "stored_count": stored_count,
             "skipped_count": len(posts) - stored_count,
-            "search_keyword": search_keyword,
+            "keywords_used": keywords_used,
             "date_range": date_info,
             "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
-        print(f"✗ Error storing posts in database: {str(e)}")
+        print(f"Error storing posts in database: {str(e)}")
         raise
 
 
 def setup_database(**context) -> Dict[str, Any]:
-    """
-    Setup database schema and tables.
-
+    """Set up database schema and tables.
+    
     Returns:
         Dict with setup results
     """
@@ -182,19 +197,17 @@ def setup_database(**context) -> Dict[str, Any]:
         print("Setting up database schema and tables...")
 
         db_manager = SentiCheckDBManager()
-
-        # This will create tables if they don't exist
         db_manager.create_tables()
 
-        print("✓ Database setup completed successfully")
+        print("Database setup completed successfully")
 
         return {
             "status": "success",
-            "message": "Database schema and tables created successfully",
+            "message": "Database set up successfully",
         }
 
     except Exception as e:
-        print(f"✗ Error setting up database: {str(e)}")
+        print(f"Error setting up database: {str(e)}")
         raise
 
 
@@ -225,7 +238,7 @@ store_posts_task = PythonOperator(
 
 cleanup_task = BashOperator(
     task_id="cleanup",
-    bash_command="echo 'Daily Bluesky data collection completed successfully'",
+    bash_command="echo 'Bluesky data collection completed'",
     dag=dag,
 )
 
