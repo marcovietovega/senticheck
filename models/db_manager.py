@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 
 import logging
-import sys
-import os
 from collections import defaultdict
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
-
 
 
 from .db_operations import get_db_operations
@@ -33,7 +30,7 @@ class SentiCheckDBManager:
 
     def get_database_stats(self) -> Dict[str, Any]:
         """Get database statistics.
-        
+
         Returns:
             Dictionary containing database statistics
         """

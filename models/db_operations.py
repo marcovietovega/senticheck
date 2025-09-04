@@ -1,11 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import logging
-import sys
-import os
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy import text, func
-
-
 
 
 from .database import (
@@ -382,7 +378,7 @@ class DatabaseOperations:
 
         Args:
             days: Number of days to look back
-            
+
         Returns:
             List of dictionaries containing sentiment data over time
         """
@@ -425,7 +421,7 @@ class DatabaseOperations:
 
         Args:
             days: Number of days to look back
-            
+
         Returns:
             List of tuples containing date and post count
         """
