@@ -1,21 +1,13 @@
 import os
 import logging
-import sys
 from contextlib import contextmanager
 from typing import Generator
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from dotenv import load_dotenv
 
-# Add parent directory to path for imports when running directly
-if __name__ == "__main__":
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-try:
-    from .database import Base
-except ImportError:
-    # Fallback for when running directly
-    from database import Base
+from .database import Base
 
 load_dotenv()
 
@@ -23,10 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseConnection:
-    """Manages database connections and infrastructure for SentiCheck."""
+    """Manages database connections for SentiCheck."""
 
     def __init__(self):
-        """Initialize database connection using environment variables."""
         self.database_url = self._build_database_url()
         self.engine = None
         self.SessionLocal = None
@@ -51,8 +42,8 @@ class DatabaseConnection:
             self.engine = create_engine(
                 self.database_url,
                 echo=False,
-                pool_pre_ping=True,  # Validate connections before use
-                pool_recycle=3600,  # Recycle connections after 1 hour
+                pool_pre_ping=True,
+                pool_recycle=3600,
             )
             self.SessionLocal = sessionmaker(
                 autocommit=False, autoflush=False, bind=self.engine
@@ -72,7 +63,7 @@ class DatabaseConnection:
             raise
 
     def drop_tables(self):
-        """Drop all database tables. Use with caution!"""
+        """Drop all database tables."""
         try:
             Base.metadata.drop_all(bind=self.engine)
             logger.info("Database tables dropped successfully")
@@ -94,11 +85,10 @@ class DatabaseConnection:
 
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:
-        """
-        Get a database session with automatic cleanup.
+        """Get a database session with automatic cleanup.
 
         Yields:
-            Session: SQLAlchemy session
+            SQLAlchemy session
         """
         session = self.SessionLocal()
         try:
