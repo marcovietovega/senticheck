@@ -273,26 +273,3 @@ def clean_bluesky_posts(
     )
 
 
-if __name__ == "__main__":
-    import sys
-    import os
-
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-    from connectors.bluesky.fetch_posts import fetch_bluesky_posts
-
-    posts = fetch_bluesky_posts("Nintendo Switch 2", 3)
-
-    if posts:
-        print("ORIGINAL POSTS:")
-        for i, post in enumerate(posts, 1):
-            print(f"\n[{i}] {post.get('text', '')}")
-
-        cleaned_posts = clean_bluesky_posts(posts, preserve_hashtags=True)
-
-        print("\nCLEANED POSTS:")
-        for i, post in enumerate(cleaned_posts, 1):
-            print(f"\n[{i}] {post.get('text', '')}")
-
-    else:
-        print("No posts found to clean.")
