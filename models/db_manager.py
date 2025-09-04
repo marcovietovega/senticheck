@@ -9,8 +9,6 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 
 
-if __name__ == "__main__":
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from .db_operations import get_db_operations
 from .database import RawPost, CleanedPost, SentimentAnalysis
@@ -20,15 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 class SentiCheckDBManager:
-    """
-    High-level database manager for SentiCheck sentiment analysis pipeline.
-
-    This class provides convenient methods for managing the complete workflow
-    from raw posts to sentiment analysis results.
-    """
+    """Database manager for SentiCheck sentiment analysis pipeline."""
 
     def __init__(self):
-        """Initialize the database manager."""
         self.db_ops = get_db_operations()
 
     def test_connection(self) -> bool:
@@ -40,28 +32,23 @@ class SentiCheckDBManager:
         self.db_ops.db_connection.create_tables()
 
     def get_database_stats(self) -> Dict[str, Any]:
-        """
-        Get comprehensive database statistics.
-
+        """Get database statistics.
+        
         Returns:
             Dictionary containing database statistics
         """
         return self.db_ops.get_database_stats()
 
-    def store_raw_posts(
-        self, posts_data: List[Dict], search_keyword: str = None
-    ) -> int:
-        """
-        Store raw posts from social media platforms.
+    def store_raw_posts(self, posts_data: List[Dict]) -> int:
+        """Store raw posts from social media platforms.
 
         Args:
-            posts_data: List of raw post data
-            search_keyword: Optional keyword to filter posts
+            posts_data: List of raw post data (each post should have search_keyword)
 
         Returns:
             Number of stored raw posts
         """
-        return self.db_ops.store_raw_posts(posts_data, search_keyword)
+        return self.db_ops.store_raw_posts(posts_data)
 
     def get_unprocessed_posts(self, limit: Optional[int] = 100) -> List[RawPost]:
         """
@@ -191,7 +178,7 @@ class SentiCheckDBManager:
             int: Number of posts processed
         """
         try:
-            from scripts.text_cleaner import TextCleaner  # TODO: Move this up
+            from scripts.text_cleaner import TextCleaner
 
             raw_posts = self.get_unprocessed_posts(limit)
             if not raw_posts:
@@ -205,7 +192,7 @@ class SentiCheckDBManager:
             for raw_post in raw_posts:
                 try:
                     post_data = {
-                        "id": raw_post.id,  # Add post ID for logging
+                        "id": raw_post.id,
                         "text": raw_post.text,
                         "author": raw_post.author,
                         "created_at": (
@@ -223,10 +210,10 @@ class SentiCheckDBManager:
                         min_content_words=min_content_words,
                     )
 
-                    # Check if post was filtered out (returns None)
+                    # Check if post was filtered out
                     if cleaned_post is None:
                         filtered_count += 1
-                        # Still mark the raw post as processed even if filtered
+                        # Mark the raw post as processed even if filtered
                         with self.db_ops.db_connection.get_session() as session:
                             raw_post_obj = (
                                 session.query(RawPost).filter_by(id=raw_post.id).first()
@@ -236,14 +223,14 @@ class SentiCheckDBManager:
                         continue
 
                     if cleaned_post.get("text", "").strip():
-                        # Add filtering metadata
+                        # Add metadata
                         cleaning_metadata = {
                             "cleaned_at": datetime.now().isoformat(),
                             "filter_hashtag_only": filter_hashtag_only,
                             "min_content_words": min_content_words,
                         }
 
-                        # Include content analysis if available
+                        # Include content analysis
                         if "content_analysis" in cleaned_post:
                             cleaning_metadata["content_analysis"] = cleaned_post[
                                 "content_analysis"
@@ -274,7 +261,7 @@ class SentiCheckDBManager:
                 )
             return processed_count
 
-        except ImportError:  # TODO: Clean this
+        except ImportError:
             logger.error("Text cleaner module not available")
             return 0
         except Exception as e:
@@ -297,9 +284,7 @@ class SentiCheckDBManager:
             int: Number of posts analyzed
         """
         try:
-            from scripts.sentiment_analyzer import (
-                SentimentAnalyzer,
-            )  # TODO: Move this up
+            from scripts.sentiment_analyzer import SentimentAnalyzer
 
             cleaned_posts = self.get_unanalyzed_posts(limit)
             if not cleaned_posts:
@@ -359,7 +344,7 @@ class SentiCheckDBManager:
                 logger.warning("No sentiment results to store")
                 return 0
 
-        except ImportError:  # TODO: Clean this
+        except ImportError:
             logger.error(
                 "Sentiment analyzer module not available - install transformers library"
             )
@@ -403,7 +388,7 @@ class SentiCheckDBManager:
                 end_date = datetime.now().date()
                 start_date = end_date - timedelta(days=days - 1)
 
-                # Simple approach: get all records and group in Python to avoid SQL complexity
+                # Get all records and group in Python
                 all_records = (
                     session.query(
                         func.date(SentimentAnalysis.analyzed_at).label("date"),
@@ -414,7 +399,7 @@ class SentiCheckDBManager:
                     .all()
                 )
 
-                # Group by date and sentiment
+                # Group data by date and sentiment
                 date_sentiment_counts = defaultdict(
                     lambda: {"positive": 0, "negative": 0, "neutral": 0}
                 )
@@ -422,7 +407,7 @@ class SentiCheckDBManager:
                 for record in all_records:
                     date_sentiment_counts[record.date][record.sentiment_label] += 1
 
-                # Convert to the expected format
+                # Convert to expected format
                 results = []
                 for date, counts in date_sentiment_counts.items():
                     results.append(
@@ -471,7 +456,7 @@ class SentiCheckDBManager:
             yesterday = today - timedelta(days=1)
 
             with self.db_ops.db_connection.get_session() as session:
-                # Today's sentiment counts
+                # Get today's sentiment counts
                 today_result = (
                     session.query(
                         SentimentAnalysis.sentiment_label,
@@ -484,7 +469,7 @@ class SentiCheckDBManager:
                     .all()
                 )
 
-                # Yesterday's sentiment counts
+                # Get yesterday's sentiment counts
                 yesterday_result = (
                     session.query(
                         SentimentAnalysis.sentiment_label,
