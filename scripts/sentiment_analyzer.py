@@ -227,38 +227,3 @@ def analyze_sentiment_batch(
         return []
 
 
-if __name__ == "__main__":
-    import sys
-    import os
-
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-    from connectors.bluesky.fetch_posts import fetch_bluesky_posts
-    from scripts.text_cleaner import clean_bluesky_posts
-
-    print("Fetching sample posts...")
-    posts = fetch_bluesky_posts("AI", 3)
-
-    if posts:
-        print("\nCleaning posts...")
-        cleaned_posts = clean_bluesky_posts(posts)
-
-        print("\nAnalyzing sentiment...")
-        analyzed_posts = analyze_sentiment_batch(cleaned_posts)
-
-        print(f"\nSENTIMENT ANALYSIS RESULTS:")
-        print("=" * 60)
-
-        for i, post in enumerate(analyzed_posts, 1):
-            sentiment = post.get("sentiment_analysis", {})
-            print(f"\n[{i}] Text: {post.get('text', '')[:100]}...")
-            print(f"    Sentiment: {sentiment.get('sentiment_label', 'N/A')}")
-            print(f"    Confidence: {sentiment.get('confidence_score', 'N/A'):.3f}")
-
-            for label in ["positive", "negative", "neutral"]:
-                score_key = f"{label}_score"
-                if score_key in sentiment:
-                    print(f"    {label.title()}: {sentiment[score_key]:.3f}")
-
-    else:
-        print("No posts found to analyze.")
