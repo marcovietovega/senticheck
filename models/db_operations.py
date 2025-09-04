@@ -6,8 +6,6 @@ from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy import text, func
 
 
-if __name__ == "__main__":
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 from .database import (
@@ -25,41 +23,32 @@ class DatabaseOperations:
     """Handles data operations for SentiCheck."""
 
     def __init__(self):
-        """Initialize database operations with connection."""
         self.db_connection = get_db_connection()
 
-    def store_raw_posts(
-        self, posts_data: List[Dict], search_keyword: str = None
-    ) -> int:
-        """
-        Store raw posts in the database
+    def store_raw_posts(self, posts_data: List[Dict]) -> int:
+        """Store raw posts in the database.
 
         Args:
-            posts_data: List of post dictionaries from Bluesky connector
-            search_keyword: The keyword used to search for these posts
+            posts_data: List of post dictionaries (each should have search_keyword)
 
         Returns:
-            int: Number of posts stored (excluding duplicates)
+            Number of posts stored (excluding duplicates)
         """
         if not posts_data:
             logger.info("No posts to store")
             return 0
 
-        # Try batch insert with PostgreSQL ON CONFLICT first
+        # Try batch insert first
         try:
-            return self._store_raw_posts_batch(posts_data, search_keyword)
+            return self._store_raw_posts_batch(posts_data)
         except Exception as e:
             logger.warning(
                 f"Batch insert failed, falling back to individual inserts: {e}"
             )
-            return self._store_raw_posts_individual(posts_data, search_keyword)
+            return self._store_raw_posts_individual(posts_data)
 
-    def _store_raw_posts_batch(
-        self, posts_data: List[Dict], search_keyword: str = None
-    ) -> int:
-        """
-        Batch insert posts using PostgreSQL ON CONFLICT DO NOTHING.
-        """
+    def _store_raw_posts_batch(self, posts_data: List[Dict]) -> int:
+        """Batch insert posts using PostgreSQL ON CONFLICT DO NOTHING."""
         from sqlalchemy.dialects.postgresql import insert
 
         stored_count = 0
@@ -78,12 +67,12 @@ class DatabaseOperations:
                         "created_at": post_data.get("timestamp")
                         or post_data.get("fetched_at"),
                         "fetched_at": post_data.get("fetched_at"),
-                        "search_keyword": search_keyword,
+                        "search_keyword": post_data.get("search_keyword"),
                         "is_processed": False,
                     }
                 )
 
-            # Use PostgreSQL's ON CONFLICT DO NOTHING to handle duplicates
+            # Handle duplicates with ON CONFLICT
             stmt = insert(RawPost).values(insert_data)
             stmt = stmt.on_conflict_do_nothing(index_elements=["post_uri"])
 
@@ -95,19 +84,15 @@ class DatabaseOperations:
         )
         return stored_count
 
-    def _store_raw_posts_individual(
-        self, posts_data: List[Dict], search_keyword: str = None
-    ) -> int:
-        """
-        Fallback method: Store posts individually with duplicate checking.
-        """
+    def _store_raw_posts_individual(self, posts_data: List[Dict]) -> int:
+        """Store posts individually with duplicate checking."""
         stored_count = 0
         skipped_count = 0
 
         for post_data in posts_data:
             try:
                 with self.db_connection.get_session() as session:
-                    # Check if post already exists
+                    # Check if post exists
                     existing_post = (
                         session.query(RawPost)
                         .filter_by(post_uri=post_data.get("post_uri", ""))
@@ -131,11 +116,11 @@ class DatabaseOperations:
                         created_at=post_data.get("timestamp")
                         or post_data.get("fetched_at"),
                         fetched_at=post_data.get("fetched_at"),
-                        search_keyword=search_keyword,
+                        search_keyword=post_data.get("search_keyword"),
                     )
 
                     session.add(raw_post)
-                    # Session commits automatically when exiting the context
+                    # Session commits when exiting context
                     stored_count += 1
 
             except Exception as e:
@@ -188,7 +173,7 @@ class DatabaseOperations:
             preserve_mentions: Whether mentions were preserved
 
         Returns:
-            int: ID of the created cleaned post, or None if failed
+            ID of the created cleaned post, or None if failed
         """
         try:
             with self.db_connection.get_session() as session:
@@ -261,7 +246,7 @@ class DatabaseOperations:
             model_version: Version of the model
 
         Returns:
-            int: ID of the created sentiment analysis, or None if failed
+            ID of the created sentiment analysis, or None if failed
         """
         try:
             with self.db_connection.get_session() as session:
@@ -310,7 +295,7 @@ class DatabaseOperations:
                 - model_version: str (optional)
 
         Returns:
-            int: Number of sentiment analyses stored
+            Number of sentiment analyses stored
         """
         stored_count = 0
 
@@ -355,7 +340,7 @@ class DatabaseOperations:
         """Get database statistics.
 
         Returns:
-            Dict: Database statistics
+            Database statistics
         """
         try:
             with self.db_connection.get_session() as session:
@@ -383,24 +368,23 @@ class DatabaseOperations:
             return {}
 
     def get_sentiment_distribution(self) -> List[Tuple[str, int]]:
-        """
-        Get sentiment distribution.
+        """Get sentiment distribution.
 
         Returns:
-            List[Tuple[str, int]]: A list of tuples containing sentiment labels and their counts.
+            List of tuples containing sentiment labels and their counts
         """
         with self.db_connection.get_session() as session:
             result = session.execute(text("SELECT * FROM get_sentiment_distribution()"))
             return [(row.sentiment_label, row.count) for row in result]
 
     def get_sentiment_over_time(self, days: int) -> List[Dict[str, Any]]:
-        """
-        Get sentiment over time.
+        """Get sentiment over time.
 
         Args:
-            days (int): The number of days to look back.
+            days: Number of days to look back
+            
         Returns:
-            List[Dict[str, Any]]: A list of dictionaries containing sentiment data over time.
+            List of dictionaries containing sentiment data over time
         """
         with self.db_connection.get_session() as session:
             result = session.execute(
@@ -417,35 +401,33 @@ class DatabaseOperations:
             ]
 
     def get_average_confidence(self) -> float:
-        """
-        Get average confidence.
+        """Get average confidence score.
 
         Returns:
-            float: The average confidence score.
+            Average confidence score
         """
         with self.db_connection.get_session() as session:
             result = session.execute(text("SELECT get_average_confidence()"))
             return result.scalar() or 0.0
 
     def get_today_posts_count(self) -> int:
-        """
-        Get today's post count.
+        """Get today's post count.
 
         Returns:
-            int: The count of today's posts.
+            Count of today's posts
         """
         with self.db_connection.get_session() as session:
             result = session.execute(text("SELECT get_today_posts_count()"))
             return result.scalar() or 0
 
     def get_posts_by_date_range(self, days: int) -> List[Tuple[str, int]]:
-        """
-        Get post counts by date for the last N days.
+        """Get post counts by date for the last N days.
 
         Args:
-            days (int): The number of days to look back.
+            days: Number of days to look back
+            
         Returns:
-            List[Tuple[str, int]]: A list of tuples containing the date and post count.
+            List of tuples containing date and post count
         """
         with self.db_connection.get_session() as session:
             end_date = datetime.now(timezone.utc).date()
