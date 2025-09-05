@@ -1,26 +1,22 @@
 """
-FastAPI Sentiment Analysis Service - SentiCheck Project
+FastAPI Sentiment Analysis Service
 
-This service provides a REST API for sentiment analysis using Hugging Face transformers.
-It replaces the direct model usage in Airflow to solve deadlock issues and improve scalability.
+REST API for sentiment analysis using Hugging Face transformers.
+Replaces direct model usage in Airflow to solve deadlock issues.
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from contextlib import asynccontextmanager
 import logging
 import time
 from datetime import datetime
-import asyncio
 import uvicorn
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import our sentiment analyzer
 try:
     import sys
     import os
@@ -31,22 +27,15 @@ except ImportError as e:
     logger.error(f"Failed to import SentimentAnalyzer: {e}")
     SentimentAnalyzer = None
 
-# Global analyzer instance (will be initialized on startup)
 analyzer = None
-
-# Service startup time for uptime calculation
 service_start_time = time.time()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Lifespan event handler for FastAPI application.
-    Handles startup and shutdown events in the modern FastAPI way.
-    """
+    """Lifespan event handler for FastAPI application."""
     global analyzer, service_start_time
 
-    # Startup events
     logger.info("Starting SentiCheck Sentiment Analysis Service...")
     service_start_time = time.time()
 
@@ -59,29 +48,24 @@ async def lifespan(app: FastAPI):
 
             if analyzer.initialize():
                 logger.info(
-                    f"✅ Sentiment analyzer initialized successfully with model: {analyzer.model_name}"
+                    f"Sentiment analyzer initialized successfully with model: {analyzer.model_name}"
                 )
             else:
-                logger.error("❌ Failed to initialize sentiment analyzer")
+                logger.error("Failed to initialize sentiment analyzer")
                 analyzer = None
         except Exception as e:
-            logger.error(f"❌ Error during startup: {e}")
+            logger.error(f"Error during startup: {e}")
             analyzer = None
 
-    # Yield control to the application
     yield
-
-    # Shutdown events
     logger.info("Shutting down SentiCheck Sentiment Analysis Service...")
 
     if analyzer:
-        # Clean up any resources if needed
         analyzer = None
 
-    logger.info("✅ Service shutdown complete")
+    logger.info("Service shutdown complete")
 
 
-# Initialize FastAPI app with lifespan handler
 app = FastAPI(
     title="SentiCheck Sentiment Analysis API",
     description="REST API for sentiment analysis using Hugging Face transformers",
@@ -92,7 +76,6 @@ app = FastAPI(
 )
 
 
-# Pydantic models for request/response validation
 class TextItem(BaseModel):
     """Single text item for analysis."""
 
@@ -360,18 +343,15 @@ async def get_model_info():
 
 
 if __name__ == "__main__":
-    # Import config for development server settings
     try:
         from config import config
 
         host = config.host if config.host != "localhost" else "0.0.0.0"
         port = config.port
     except ImportError:
-        # Fallback if config import fails
         import os
 
         host = "0.0.0.0"
         port = int(os.getenv("SENTIMENT_SERVICE_PORT", "8000"))
 
-    # Run the service directly for development
     uvicorn.run("main:app", host=host, port=port, reload=True, log_level="info")
