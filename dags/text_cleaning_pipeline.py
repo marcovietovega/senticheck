@@ -1,8 +1,8 @@
 """
-Text Cleaning Pipeline DAG - SentiCheck Project
+Text Cleaning Pipeline DAG
 
-This DAG processes raw posts through text cleaning pipeline.
-It cleans stored raw posts and prepares them for sentiment analysis.
+Processes raw posts through text cleaning pipeline.
+Cleans stored raw posts and prepares them for sentiment analysis.
 """
 
 import os
@@ -44,11 +44,10 @@ dag = DAG(
 
 
 def check_database_connection(**context) -> Dict[str, Any]:
-    """
-    Check database connection and get current statistics.
+    """Check database connection and get current statistics.
 
     Returns:
-        Dict with database statistics
+        Database statistics
     """
     try:
         print("Checking database connection...")
@@ -58,7 +57,7 @@ def check_database_connection(**context) -> Dict[str, Any]:
         if not db_manager.test_connection():
             raise Exception("Database connection test failed")
 
-        print("✓ Database connection successful")
+        print("Database connection successful")
 
         # Get current statistics
         stats = db_manager.get_database_stats()
@@ -73,16 +72,15 @@ def check_database_connection(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"✗ Error checking database connection: {str(e)}")
+        print(f"Error checking database connection: {str(e)}")
         raise
 
 
 def check_unprocessed_posts(**context) -> Dict[str, Any]:
-    """
-    Check how many raw posts are available for processing.
+    """Check how many raw posts are available for processing.
 
     Returns:
-        Dict with unprocessed posts information
+        Unprocessed posts information
     """
     try:
         print("Checking for unprocessed posts...")
@@ -129,7 +127,7 @@ def check_unprocessed_posts(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"✗ Error checking unprocessed posts: {str(e)}")
+        print(f"Error checking unprocessed posts: {str(e)}")
         raise
 
 
@@ -180,7 +178,7 @@ def clean_posts(**context) -> Dict[str, Any]:
             limit=None,  # Process ALL unprocessed posts
         )
 
-        print(f"✓ Successfully cleaned {processed_count} posts")
+        print(f"Successfully cleaned {processed_count} posts")
 
         # Get updated statistics
         updated_stats = db_manager.get_database_stats()
@@ -197,7 +195,7 @@ def clean_posts(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"✗ Error cleaning posts: {str(e)}")
+        print(f"Error cleaning posts: {str(e)}")
         raise
 
 
@@ -276,7 +274,7 @@ def validate_cleaned_posts(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"✗ Error validating cleaned posts: {str(e)}")
+        print(f"Error validating cleaned posts: {str(e)}")
         raise
 
 
