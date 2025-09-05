@@ -7,7 +7,6 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(parent_dir))
 
@@ -19,22 +18,19 @@ logger = logging.getLogger(__name__)
 
 
 class DashboardDataService:
-    """
-    Data service for the SentiCheck dashboard.
+    """Data service for the SentiCheck dashboard.
 
-    Provides high-level methods to fetch and process data for dashboard components,
+    Provides methods to fetch and process data for dashboard components,
     including KPIs, charts, and trends.
     """
 
     def __init__(self):
-        """Initialize the data service."""
         self.db_manager = get_db_manager()
         self.cache = {}
         self.cache_ttl = DASHBOARD_CONFIG["refresh"]["cache_ttl"]
 
     def _is_cache_valid(self, cache_key: str) -> bool:
-        """
-        Check if cached data is still valid.
+        """Check if cached data is still valid.
 
         Returns:
             True if cache is valid, False otherwise

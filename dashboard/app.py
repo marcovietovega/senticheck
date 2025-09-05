@@ -30,7 +30,7 @@ def render_page_title():
     """Render the main page title"""
     st.markdown(
         """
-        <div style="text-align: center; margin-bottom: 32px;"> #TODO: Check if these styles can be moved to styles.py
+        <div style="text-align: center; margin-bottom: 32px;"> <!-- TODO: Check if these styles can be moved to styles.py -->
             <h1 style="font-size: 48px; font-weight: 600; margin-bottom: 8px; color: #111827;">
                 📊 SentiCheck
             </h1>
