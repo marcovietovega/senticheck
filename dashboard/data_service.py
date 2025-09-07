@@ -68,6 +68,11 @@ class DashboardDataService:
         """
         self.cache[cache_key] = {"data": data, "timestamp": datetime.now()}
 
+    def clear_cache(self):
+        """Clear all cached data."""
+        self.cache.clear()
+        logger.info("Dashboard cache cleared")
+
     def get_database_stats(self) -> Dict[str, int]:
         """
         Get basic database statistics.
@@ -94,20 +99,27 @@ class DashboardDataService:
                 "unanalyzed_posts": 0,
             }
 
-    def get_sentiment_distribution(self) -> Dict[str, int]:
+    def get_sentiment_distribution(
+        self, selected_keywords: Optional[List[str]] = None
+    ) -> Dict[str, int]:
         """
         Get sentiment distribution counts.
+
+        Args:
+            selected_keywords: List of keywords to filter by, None for all keywords
 
         Returns:
             Dict with counts for each sentiment label
         """
-        cache_key = "sentiment_distribution"
+        cache_key = f"sentiment_distribution_{selected_keywords or 'all'}"
         cached_data = self._get_cached_data(cache_key)
         if cached_data:
             return cached_data
 
         try:
-            distribution = self.db_manager.get_sentiment_distribution()
+            distribution = self.db_manager.get_sentiment_distribution_filtered(
+                selected_keywords
+            )
             self._set_cache_data(cache_key, distribution)
             return distribution
 
@@ -160,24 +172,29 @@ class DashboardDataService:
             logger.error(f"Error calculating sentiment trends: {e}")
             return {"positive_trend": 0.0, "negative_trend": 0.0, "neutral_trend": 0.0}
 
-    def get_sentiment_over_time(self, days: int = 7) -> pd.DataFrame:
+    def get_sentiment_over_time(
+        self, days: int = 7, selected_keywords: Optional[List[str]] = None
+    ) -> pd.DataFrame:
         """
         Get sentiment data over time for charting.
 
         Args:
             days: Number of days of historical data to return
+            selected_keywords: List of keywords to filter by, None for all keywords
 
         Returns:
             DataFrame with columns: date, positive, negative, neutral
         """
-        cache_key = f"sentiment_over_time_{days}"
+        cache_key = f"sentiment_over_time_{days}_{selected_keywords or 'all'}"
         cached_data = self._get_cached_data(cache_key)
         if cached_data is not None:
             return cached_data
 
         try:
-            # Get raw data from db_manager
-            raw_data = self.db_manager.get_sentiment_over_time(days)
+            # Get raw data from db_manager with keyword filtering
+            raw_data = self.db_manager.get_sentiment_over_time_filtered(
+                days, selected_keywords
+            )
 
             # Calculate date range for filling missing dates
             end_date = datetime.now().date()
@@ -266,6 +283,43 @@ class DashboardDataService:
                 "neutral_trend": 0.0,
                 "confidence_trend": 0.0,
                 "daily_trend": 0.0,
+            }
+
+    def get_keyword_specific_kpis(self, selected_keyword: str) -> Dict[str, Any]:
+        """
+        Get enhanced KPI metrics focused on a specific keyword.
+
+        Args:
+            selected_keyword: Single keyword to analyze
+
+        Returns:
+            Dict with keyword-specific KPI values
+        """
+        cache_key = f"keyword_kpis_{selected_keyword}"
+        cached_data = self._get_cached_data(cache_key)
+        if cached_data:
+            return cached_data
+
+        try:
+            kpi_data = self.db_manager.get_keyword_specific_kpis(selected_keyword)
+            self._set_cache_data(cache_key, kpi_data)
+            return kpi_data
+
+        except Exception as e:
+            logger.error(
+                f"Error getting keyword-specific KPIs for {selected_keyword}: {e}"
+            )
+            return {
+                "posts_this_week": 0,
+                "week_trend": 0.0,
+                "confidence_score": 0.0,
+                "sentiment_momentum": "stable",
+                "momentum_change": 0.0,
+                "keyword_rank": 0,
+                "total_keywords": 0,
+                "daily_average": 0.0,
+                "peak_sentiment": 0.0,
+                "peak_date": None,
             }
 
     def get_recent_posts(self, limit: int = 10) -> List[Dict[str, Any]]:
