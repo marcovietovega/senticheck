@@ -370,7 +370,15 @@ class DatabaseOperations:
             List of tuples containing sentiment labels and their counts
         """
         with self.db_connection.get_session() as session:
-            result = session.execute(text("SELECT * FROM get_sentiment_distribution()"))
+            result = (
+                session.query(
+                    SentimentAnalysis.sentiment_label,
+                    func.count(SentimentAnalysis.id).label("count"),
+                )
+                .group_by(SentimentAnalysis.sentiment_label)
+                .order_by(SentimentAnalysis.sentiment_label)
+                .all()
+            )
             return [(row.sentiment_label, row.count) for row in result]
 
     def get_sentiment_over_time(self, days: int) -> List[Dict[str, Any]]:
