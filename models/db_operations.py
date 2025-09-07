@@ -434,8 +434,11 @@ class DatabaseOperations:
             Average confidence score
         """
         with self.db_connection.get_session() as session:
-            result = session.execute(text("SELECT get_average_confidence()"))
-            return result.scalar() or 0.0
+            result = session.query(
+                func.avg(SentimentAnalysis.confidence_score)
+            ).scalar()
+            # Convert to percentage (multiply by 100) and handle None case
+            return float((result or 0.0) * 100)
 
     def get_today_posts_count(self) -> int:
         """Get today's post count.
