@@ -9,12 +9,11 @@ Built following the SentiCheck UI Style Guide for clean, scannable visualization
 __version__ = "1.0.0"
 __author__ = "SentiCheck Team"
 
-from .config import DASHBOARD_CONFIG, SENTIMENT_LABELS, KPI_METRICS
+from .config import DASHBOARD_CONFIG, SENTIMENT_LABELS
 from .data_service import get_dashboard_data_service
 
 __all__ = [
     "DASHBOARD_CONFIG",
-    "SENTIMENT_LABELS",
-    "KPI_METRICS",
+    "SENTIMENT_LABELS", 
     "get_dashboard_data_service",
 ]
