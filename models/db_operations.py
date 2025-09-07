@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import logging
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy import text, func
+from sqlalchemy import func
 
 
 from .database import (
@@ -333,16 +333,17 @@ class DatabaseOperations:
         return stored_count
 
     def get_database_stats(self) -> Dict[str, Any]:
-        """Get database statistics.
+        """Get database statistics using SentimentAnalysis as source of truth for analyzed posts.
 
         Returns:
             Database statistics
         """
         try:
             with self.db_connection.get_session() as session:
+                analyzed_posts_count = session.query(SentimentAnalysis).count()
+
                 raw_posts_count = session.query(RawPost).count()
                 cleaned_posts_count = session.query(CleanedPost).count()
-                analyzed_posts_count = session.query(SentimentAnalysis).count()
 
                 unprocessed_posts = (
                     session.query(RawPost).filter_by(is_processed=False).count()
@@ -437,7 +438,7 @@ class DatabaseOperations:
             result = session.query(
                 func.avg(SentimentAnalysis.confidence_score)
             ).scalar()
-            # Convert to percentage (multiply by 100) and handle None case
+
             return float((result or 0.0) * 100)
 
     def get_today_posts_count(self) -> int:
@@ -470,12 +471,12 @@ class DatabaseOperations:
 
             result = (
                 session.query(
-                    func.date(RawPost.created_at).label("date"),
-                    func.count(RawPost.id).label("count"),
+                    func.date(SentimentAnalysis.analyzed_at).label("date"),
+                    func.count(SentimentAnalysis.id).label("count"),
                 )
-                .filter(func.date(RawPost.created_at) >= start_date)
-                .group_by(func.date(RawPost.created_at))
-                .order_by(func.date(RawPost.created_at))
+                .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
+                .group_by(func.date(SentimentAnalysis.analyzed_at))
+                .order_by(func.date(SentimentAnalysis.analyzed_at))
                 .all()
             )
 
@@ -484,7 +485,6 @@ class DatabaseOperations:
     def get_keywords_with_counts(self) -> List[tuple]:
         """
         Get all available keywords with their analyzed post counts.
-        Only counts posts that have completed the full pipeline (sentiment analysis).
 
         Returns:
             List of tuples (keyword, count)
@@ -496,11 +496,11 @@ class DatabaseOperations:
                         RawPost.search_keyword,
                         func.count(SentimentAnalysis.id).label("post_count"),
                     )
-                    .join(CleanedPost, RawPost.id == CleanedPost.raw_post_id)
+                    .select_from(SentimentAnalysis)
                     .join(
-                        SentimentAnalysis,
-                        CleanedPost.id == SentimentAnalysis.cleaned_post_id,
+                        CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
                     )
+                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
                     .filter(RawPost.search_keyword.isnot(None))
                     .group_by(RawPost.search_keyword)
                     .order_by(func.count(SentimentAnalysis.id).desc())
@@ -514,7 +514,6 @@ class DatabaseOperations:
     def get_keyword_specific_metrics(self, keyword: str) -> Dict[str, Any]:
         """
         Get sentiment metrics for a specific keyword.
-        Uses only analyzed posts (completed sentiment analysis pipeline).
 
         Args:
             keyword: The keyword to analyze
@@ -524,13 +523,13 @@ class DatabaseOperations:
         """
         try:
             with self.db_connection.get_session() as session:
-                # Get sentiment counts and confidence for keyword using SQLAlchemy ORM
                 sentiment_result = (
                     session.query(
                         SentimentAnalysis.sentiment_label,
                         func.count(SentimentAnalysis.id).label("count"),
                         func.avg(SentimentAnalysis.confidence_score).label("avg_conf"),
                     )
+                    .select_from(SentimentAnalysis)
                     .join(
                         CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
                     )
@@ -553,20 +552,19 @@ class DatabaseOperations:
                     total_posts += count
                     total_confidence += avg_conf * count
 
-                # Get today's analyzed posts for this keyword using SQLAlchemy ORM
                 today = datetime.now(timezone.utc).date()
                 posts_today = (
                     session.query(func.count(SentimentAnalysis.id))
+                    .select_from(SentimentAnalysis)
                     .join(
                         CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
                     )
                     .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
                     .filter(RawPost.search_keyword == keyword)
-                    .filter(func.date(RawPost.created_at) == today)
+                    .filter(func.date(SentimentAnalysis.analyzed_at) == today)
                     .scalar()
                 ) or 0
 
-                # Calculate percentages and average confidence
                 if total_posts > 0:
                     positive_pct = sentiment_counts["positive"] / total_posts * 100
                     negative_pct = sentiment_counts["negative"] / total_posts * 100
@@ -589,6 +587,106 @@ class DatabaseOperations:
         except Exception as e:
             logger.error(f"Error getting keyword metrics for {keyword}: {e}")
             return {}
+
+    def get_unified_kpi_metrics(
+        self, selected_keywords: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Get unified KPI metrics using SentimentAnalysis as single source of truth.
+
+        Args:
+            selected_keywords: List of keywords to filter by, None for all keywords
+
+        Returns:
+            Dictionary with all KPI metrics: total_posts, sentiment percentages,
+            avg_confidence, posts_today
+        """
+        try:
+            with self.db_connection.get_session() as session:
+                # Base query for sentiment analysis data
+                base_query = session.query(
+                    SentimentAnalysis.sentiment_label,
+                    func.count(SentimentAnalysis.id).label("count"),
+                    func.avg(SentimentAnalysis.confidence_score).label("avg_conf"),
+                ).select_from(SentimentAnalysis)
+
+                # Add JOINs and keyword filtering if needed
+                if selected_keywords is not None and selected_keywords:
+                    base_query = (
+                        base_query.join(
+                            CleanedPost,
+                            SentimentAnalysis.cleaned_post_id == CleanedPost.id,
+                        )
+                        .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+                        .filter(RawPost.search_keyword.in_(selected_keywords))
+                    )
+
+                sentiment_result = base_query.group_by(
+                    SentimentAnalysis.sentiment_label
+                ).all()
+
+                total_posts = 0
+                sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}
+                total_confidence_weighted = 0
+
+                for row in sentiment_result:
+                    sentiment = row.sentiment_label
+                    count = row.count
+                    avg_conf = row.avg_conf or 0
+
+                    sentiment_counts[sentiment] = count
+                    total_posts += count
+                    total_confidence_weighted += avg_conf * count
+
+                today = datetime.now(timezone.utc).date()
+                today_query = session.query(
+                    func.count(SentimentAnalysis.id)
+                ).select_from(SentimentAnalysis)
+
+                if selected_keywords is not None and selected_keywords:
+                    today_query = (
+                        today_query.join(
+                            CleanedPost,
+                            SentimentAnalysis.cleaned_post_id == CleanedPost.id,
+                        )
+                        .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+                        .filter(RawPost.search_keyword.in_(selected_keywords))
+                        .filter(func.date(SentimentAnalysis.analyzed_at) == today)
+                    )
+                else:
+                    today_query = today_query.filter(
+                        func.date(SentimentAnalysis.analyzed_at) == today
+                    )
+
+                posts_today = today_query.scalar() or 0
+
+                if total_posts > 0:
+                    positive_pct = sentiment_counts["positive"] / total_posts * 100
+                    negative_pct = sentiment_counts["negative"] / total_posts * 100
+                    neutral_pct = sentiment_counts["neutral"] / total_posts * 100
+                    avg_confidence = total_confidence_weighted / total_posts * 100
+                else:
+                    positive_pct = negative_pct = neutral_pct = avg_confidence = 0
+
+                return {
+                    "total_posts": total_posts,
+                    "positive_percentage": round(positive_pct, 1),
+                    "negative_percentage": round(negative_pct, 1),
+                    "neutral_percentage": round(neutral_pct, 1),
+                    "avg_confidence": round(avg_confidence, 1),
+                    "posts_today": posts_today,
+                }
+
+        except Exception as e:
+            logger.error(f"Error getting unified KPI metrics: {e}")
+            return {
+                "total_posts": 0,
+                "positive_percentage": 0.0,
+                "negative_percentage": 0.0,
+                "neutral_percentage": 0.0,
+                "avg_confidence": 0.0,
+                "posts_today": 0,
+            }
 
 
 db_operations = None
