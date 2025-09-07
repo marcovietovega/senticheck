@@ -5,12 +5,15 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(parent_dir))
 
 
-from dashboard.charts import render_sentiment_over_time_chart
+from dashboard.charts import (
+    render_sentiment_over_time_chart,
+    render_sentiment_distribution_chart,
+    render_volume_analysis_chart,
+)
 from dashboard.styles import apply_styles, apply_dropdown_styles
 from dashboard.data_service import get_dashboard_data_service
 from dashboard.components import render_keyword_selector
@@ -31,7 +34,7 @@ def render_page_title():
     """Render the main page title"""
     st.markdown(
         """
-        <div style="text-align: center; margin-bottom: 32px;"> <!-- TODO: Check if these styles can be moved to styles.py -->
+        <div style="text-align: center; margin-bottom: 32px;">
             <h1 style="font-size: 48px; font-weight: 600; margin-bottom: 8px; color: #111827;">
                 📊 SentiCheck
             </h1>
@@ -76,24 +79,27 @@ def render_metric_card(
 
 
 def render_kpi_section(selected_keywords=None):
-    """Render the KPI section with key sentiment metrics."""
+    """Render the KPI section with keyword-specific metrics."""
     try:
-        if selected_keywords is None:
-            selected_keywords = st.session_state.get("selected_keywords", None)
-
-        if selected_keywords:
-            keyword_text = (
-                ", ".join(selected_keywords)
-                if len(selected_keywords) <= 3
-                else f"{len(selected_keywords)} keywords"
-            )
+        if selected_keywords and len(selected_keywords) > 0:
+            selected_keyword = selected_keywords[0]
+            keyword_text = selected_keyword
             st.header(f"Key Performance Indicators - {keyword_text}")
         else:
+            selected_keyword = "AI"  # Default keyword
             st.header("Key Performance Indicators - All Keywords")
+
         st.markdown("---")
 
         data_service = get_dashboard_data_service()
-        kpi_data = data_service.get_kpi_metrics(selected_keywords)
+        if (selected_keywords and len(selected_keywords) == 1) or (
+            not selected_keywords
+        ):
+            kpi_data = data_service.get_kpi_metrics([selected_keyword])
+            keyword_kpis = data_service.get_keyword_specific_kpis(selected_keyword)
+        else:
+            kpi_data = data_service.get_kpi_metrics(selected_keywords)
+            keyword_kpis = None
 
         col1, col2, col3 = st.columns(3, gap="medium")
 
@@ -126,160 +132,186 @@ def render_kpi_section(selected_keywords=None):
             )
 
         with col3:
-            render_metric_card(
-                title="Average Confidence",
-                value=f"{kpi_data['avg_confidence']:.1f}%",
-                delta="→ Stable",
-                delta_color="positive",
-                help_text="Average confidence score of sentiment predictions",
-            )
+            if keyword_kpis:
+                render_metric_card(
+                    title="Keyword Confidence",
+                    value=f"{keyword_kpis['confidence_score']:.1f}%",
+                    delta="→ Keyword-specific",
+                    delta_color="positive",
+                    help_text=f"Average confidence score for {selected_keyword} sentiment predictions",
+                )
+            else:
+                render_metric_card(
+                    title="Average Confidence",
+                    value=f"{kpi_data['avg_confidence']:.1f}%",
+                    delta="→ Stable",
+                    delta_color="positive",
+                    help_text="Average confidence score of sentiment predictions",
+                )
 
         st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
 
-        col4, col5, col6 = st.columns(3, gap="medium")
+        if keyword_kpis:
+            col4, col5, col6 = st.columns(3, gap="medium")
 
-        with col4:
-            render_metric_card(
-                title="Negative Sentiment",
-                value=f"{kpi_data['negative_percentage']:.1f}%",
-                delta=(
-                    f"{'↓' if kpi_data['negative_trend'] <= 0 else '↑'} {kpi_data['negative_trend']:+.1f}% vs yesterday"
-                    if kpi_data["negative_trend"] != 0
-                    else "→ No change"
-                ),
-                delta_color=(
-                    "positive" if kpi_data["negative_trend"] <= 0 else "negative"
-                ),
-                help_text="Percentage of posts with negative sentiment",
-            )
+            with col4:
+                week_trend_color = (
+                    "positive" if keyword_kpis["week_trend"] >= 0 else "negative"
+                )
+                render_metric_card(
+                    title="Posts This Week",
+                    value=f"{keyword_kpis['posts_this_week']:,}",
+                    delta=(
+                        f"{'↑' if keyword_kpis['week_trend'] >= 0 else '↓'} {keyword_kpis['week_trend']:+.1f}% vs last week"
+                        if keyword_kpis["week_trend"] != 0
+                        else "→ No change"
+                    ),
+                    delta_color=week_trend_color,
+                    help_text=f"Weekly posts for {selected_keyword} with trend analysis",
+                )
 
-        with col5:
-            render_metric_card(
-                title="Neutral Sentiment",
-                value=f"{kpi_data['neutral_percentage']:.1f}%",
-                delta=(
-                    f"{'↑' if kpi_data['neutral_trend'] >= 0 else '↓'} {kpi_data['neutral_trend']:+.1f}% vs yesterday"
-                    if kpi_data["neutral_trend"] != 0
-                    else "→ No change"
-                ),
-                delta_color="neutral",
-                help_text="Percentage of posts with neutral sentiment",
-            )
+            with col5:
+                momentum = keyword_kpis["sentiment_momentum"]
+                momentum_icons = {"improving": "📈", "declining": "📉", "stable": "➡️"}
+                momentum_colors = {
+                    "improving": "positive",
+                    "declining": "negative",
+                    "stable": "neutral",
+                }
 
-        with col6:
-            render_metric_card(
-                title="Posts Today",
-                value=f"{kpi_data['posts_today']:,}",
-                delta=(
-                    f"{'↑' if kpi_data['daily_trend'] >= 0 else '↓'} {kpi_data['daily_trend']:+.1f}% vs yesterday"
-                    if kpi_data["daily_trend"] != 0
-                    else "→ No change"
-                ),
-                delta_color=(
-                    "negative"
-                    if kpi_data["daily_trend"] < -50
-                    else ("positive" if kpi_data["daily_trend"] >= 0 else "neutral")
-                ),
-                help_text="Number of posts processed today",
-            )
+                render_metric_card(
+                    title="Sentiment Momentum",
+                    value=f"{momentum_icons.get(momentum, '➡️')} {momentum.title()}",
+                    delta=(
+                        f"{keyword_kpis['momentum_change']:+.1f}% change"
+                        if keyword_kpis["momentum_change"] != 0
+                        else "No change"
+                    ),
+                    delta_color=momentum_colors.get(momentum, "neutral"),
+                    help_text="Recent sentiment trend direction for this keyword",
+                )
 
-    except Exception as e:
-        st.error(f"KPI Section Error: {e}")
-        import traceback
+            with col6:
+                rank = keyword_kpis["keyword_rank"]
+                total = keyword_kpis["total_keywords"]
+                render_metric_card(
+                    title="Keyword Rank",
+                    value=f"#{rank} of {total}",
+                    delta=f"By post volume",
+                    delta_color="neutral",
+                    help_text=f"{selected_keyword} ranks #{rank} by total post count",
+                )
 
-        st.text(traceback.format_exc())
+            st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
 
-        with col2:
-            render_metric_card(
-                title="Positive Sentiment",
-                value=f"{kpi_data['positive_percentage']:.1f}%",
-                delta=(
-                    f"{'↑' if kpi_data['positive_trend'] >= 0 else '↓'} {kpi_data['positive_trend']:+.1f}% vs yesterday"
-                    if kpi_data["positive_trend"] != 0
-                    else "→ No change"
-                ),
-                delta_color=(
-                    "positive" if kpi_data["positive_trend"] >= 0 else "negative"
-                ),
-                help_text="Percentage of posts with positive sentiment - increases are good (green), decreases are concerning (red)",
-            )
+            col7, col8, col9 = st.columns(3, gap="medium")
 
-        with col3:
-            render_metric_card(
-                title="Average Confidence",
-                value=f"{kpi_data['avg_confidence']:.1f}%",
-                delta=(
-                    f"{'↑' if kpi_data['confidence_trend'] >= 0 else '↓'} {kpi_data['confidence_trend']:+.1f}% vs yesterday"
-                    if kpi_data["confidence_trend"] != 0
-                    else "→ Stable"
-                ),
-                delta_color=(
-                    "positive" if kpi_data["confidence_trend"] >= 0 else "inverse"
-                ),
-                help_text="Average confidence score of sentiment predictions",
-            )
+            with col7:
+                render_metric_card(
+                    title="Daily Average",
+                    value=f"{keyword_kpis['daily_average']:.1f}",
+                    delta="posts per day",
+                    delta_color="neutral",
+                    help_text=f"Average daily posts for {selected_keyword} (30-day avg)",
+                )
 
-        st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
+            with col8:
+                peak_date = keyword_kpis["peak_date"]
+                peak_value = (
+                    float(keyword_kpis["peak_sentiment"])
+                    if keyword_kpis["peak_sentiment"]
+                    else 0.0
+                )
+                render_metric_card(
+                    title="Peak Performance",
+                    value=f"{peak_value:.1f}%",
+                    delta=f"on {peak_date}" if peak_date else "No data",
+                    delta_color="positive" if peak_value > 50 else "neutral",
+                    help_text="Best sentiment day in the last 30 days",
+                )
 
-        col4, col5, col6 = st.columns(3, gap="medium")
+            with col9:
+                render_metric_card(
+                    title="Posts Today",
+                    value=f"{kpi_data['posts_today']:,}",
+                    delta=(
+                        f"{'↑' if kpi_data['daily_trend'] >= 0 else '↓'} {kpi_data['daily_trend']:+.1f}% vs yesterday"
+                        if kpi_data["daily_trend"] != 0
+                        else "→ No change"
+                    ),
+                    delta_color=(
+                        "negative"
+                        if kpi_data["daily_trend"] < -50
+                        else ("positive" if kpi_data["daily_trend"] >= 0 else "neutral")
+                    ),
+                    help_text="Number of posts processed today",
+                )
+        else:
+            col4, col5, col6 = st.columns(3, gap="medium")
 
-        with col4:
-            # For negative sentiment: decreasing is good (green), increasing is bad (red)
-            negative_delta_color = (
-                "positive" if kpi_data["negative_trend"] <= 0 else "negative"
-            )
-            render_metric_card(
-                title="Negative Sentiment",
-                value=f"{kpi_data['negative_percentage']:.1f}%",
-                delta=(
-                    f"{'↓' if kpi_data['negative_trend'] <= 0 else '↑'} {kpi_data['negative_trend']:+.1f}% vs yesterday"
-                    if kpi_data["negative_trend"] != 0
-                    else "→ No change"
-                ),
-                delta_color=negative_delta_color,
-                help_text="Percentage of posts with negative sentiment - decreases are good (green), increases are concerning (red)",
-            )
+            with col4:
+                render_metric_card(
+                    title="Negative Sentiment",
+                    value=f"{kpi_data['negative_percentage']:.1f}%",
+                    delta=(
+                        f"{'↓' if kpi_data['negative_trend'] <= 0 else '↑'} {kpi_data['negative_trend']:+.1f}% vs yesterday"
+                        if kpi_data["negative_trend"] != 0
+                        else "→ No change"
+                    ),
+                    delta_color=(
+                        "positive" if kpi_data["negative_trend"] <= 0 else "negative"
+                    ),
+                    help_text="Percentage of posts with negative sentiment",
+                )
 
-        with col5:
-            # For neutral sentiment: direction is less important, use off/gray for trends
-            render_metric_card(
-                title="Neutral Sentiment",
-                value=f"{kpi_data['neutral_percentage']:.1f}%",
-                delta=(
-                    f"{'↑' if kpi_data['neutral_trend'] >= 0 else '↓'} {kpi_data['neutral_trend']:+.1f}% vs yesterday"
-                    if kpi_data["neutral_trend"] != 0
-                    else "→ No change"
-                ),
-                delta_color="neutral",  # Always neutral/gray for neutral sentiment trends
-                help_text="Percentage of posts with neutral sentiment",
-            )
+            with col5:
+                render_metric_card(
+                    title="Neutral Sentiment",
+                    value=f"{kpi_data['neutral_percentage']:.1f}%",
+                    delta=(
+                        f"{'↑' if kpi_data['neutral_trend'] >= 0 else '↓'} {kpi_data['neutral_trend']:+.1f}% vs yesterday"
+                        if kpi_data["neutral_trend"] != 0
+                        else "→ No change"
+                    ),
+                    delta_color="neutral",
+                    help_text="Percentage of posts with neutral sentiment",
+                )
 
-        with col6:
-            # For posts today: fewer posts might be concerning, but could be normal daily variation
-            posts_delta_color = (
-                "negative"
-                if kpi_data["daily_trend"] < -50
-                else ("positive" if kpi_data["daily_trend"] >= 0 else "neutral")
-            )
-            render_metric_card(
-                title="Posts Today",
-                value=f"{kpi_data['posts_today']:,}",
-                delta=(
-                    f"{'↑' if kpi_data['daily_trend'] >= 0 else '↓'} {kpi_data['daily_trend']:+.1f}% vs yesterday"
-                    if kpi_data["daily_trend"] != 0
-                    else "→ No change"
-                ),
-                delta_color=posts_delta_color,
-                help_text="Number of posts processed today - large changes may indicate data collection issues",
-            )
+            with col6:
+                render_metric_card(
+                    title="Posts Today",
+                    value=f"{kpi_data['posts_today']:,}",
+                    delta=(
+                        f"{'↑' if kpi_data['daily_trend'] >= 0 else '↓'} {kpi_data['daily_trend']:+.1f}% vs yesterday"
+                        if kpi_data["daily_trend"] != 0
+                        else "→ No change"
+                    ),
+                    delta_color=(
+                        "negative"
+                        if kpi_data["daily_trend"] < -50
+                        else ("positive" if kpi_data["daily_trend"] >= 0 else "neutral")
+                    ),
+                    help_text="Number of posts processed today",
+                )
 
     except Exception as e:
         st.error(f"Error loading KPI data: {e}")
+        import traceback
+
+        st.text(traceback.format_exc())
 
 
 def render_chart_section():
     """Render the charts section."""
     render_sentiment_over_time_chart()
+
+    col1, col2 = st.columns(2, gap="large")
+
+    with col1:
+        render_sentiment_distribution_chart()
+
+    with col2:
+        render_volume_analysis_chart()
 
 
 def main():
