@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import logging
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy import func
+from sqlalchemy import func, case
 
 
 from .database import (
@@ -638,7 +638,7 @@ class DatabaseOperations:
                     total_posts += count
                     total_confidence_weighted += avg_conf * count
 
-                today = datetime.now(timezone.utc).date()
+                today = datetime.now().date()
                 today_query = session.query(
                     func.count(SentimentAnalysis.id)
                 ).select_from(SentimentAnalysis)
@@ -687,6 +687,277 @@ class DatabaseOperations:
                 "avg_confidence": 0.0,
                 "posts_today": 0,
             }
+
+    def get_keyword_specific_kpis(self, selected_keyword: str) -> Dict[str, Any]:
+        """
+        Get enhanced KPI metrics for a specific keyword.
+
+        Args:
+            selected_keyword: Single keyword to analyze
+
+        Returns:
+            Dictionary with keyword-specific KPI metrics
+        """
+        try:
+            with self.db_connection.get_session() as session:
+                results = {}
+
+                week_posts = self._get_posts_this_week(session, selected_keyword)
+                results.update(week_posts)
+
+                confidence = self._get_keyword_confidence(session, selected_keyword)
+                results["confidence_score"] = confidence
+
+                momentum = self._get_sentiment_momentum(session, selected_keyword)
+                results.update(momentum)
+
+                rank = self._get_keyword_rank(session, selected_keyword)
+                results.update(rank)
+
+                daily_avg = self._get_daily_average(session, selected_keyword)
+                results["daily_average"] = daily_avg
+
+                peak = self._get_peak_performance(session, selected_keyword)
+                results.update(peak)
+
+                return results
+
+        except Exception as e:
+            logger.error(
+                f"Error getting keyword-specific KPIs for {selected_keyword}: {e}"
+            )
+            return {
+                "posts_this_week": 0,
+                "week_trend": 0.0,
+                "confidence_score": 0.0,
+                "sentiment_momentum": "stable",
+                "momentum_change": 0.0,
+                "keyword_rank": 0,
+                "total_keywords": 0,
+                "daily_average": 0.0,
+                "peak_sentiment": 0.0,
+                "peak_date": None,
+            }
+
+    def _get_posts_this_week(self, session, keyword: str) -> Dict[str, Any]:
+        """Get posts this week with trend vs last week."""
+        from datetime import timedelta
+
+        today = datetime.now(timezone.utc).date()
+        week_start = today - timedelta(days=today.weekday())
+        last_week_start = week_start - timedelta(days=7)
+
+        this_week = (
+            session.query(func.count(SentimentAnalysis.id))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= week_start,
+            )
+            .scalar()
+            or 0
+        )
+
+        last_week = (
+            session.query(func.count(SentimentAnalysis.id))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= last_week_start,
+                func.date(SentimentAnalysis.analyzed_at) < week_start,
+            )
+            .scalar()
+            or 0
+        )
+
+        trend = 0.0
+        if last_week > 0:
+            trend = ((this_week - last_week) / last_week) * 100
+        elif this_week > 0:
+            trend = 100.0
+
+        return {"posts_this_week": this_week, "week_trend": round(trend, 1)}
+
+    def _get_keyword_confidence(self, session, keyword: str) -> float:
+        """Get average confidence score for this keyword."""
+        confidence = (
+            session.query(func.avg(SentimentAnalysis.confidence_score))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(RawPost.search_keyword == keyword)
+            .scalar()
+        )
+
+        return round((confidence or 0) * 100, 1)
+
+    def _get_sentiment_momentum(self, session, keyword: str) -> Dict[str, Any]:
+        """Calculate if sentiment is improving or declining."""
+        from datetime import timedelta
+
+        today = datetime.now(timezone.utc).date()
+        three_days_ago = today - timedelta(days=3)
+        week_ago = today - timedelta(days=7)
+
+        recent_positive = (
+            session.query(func.count(SentimentAnalysis.id))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                SentimentAnalysis.sentiment_label == "positive",
+                func.date(SentimentAnalysis.analyzed_at) >= three_days_ago,
+            )
+            .scalar()
+            or 0
+        )
+
+        recent_total = (
+            session.query(func.count(SentimentAnalysis.id))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= three_days_ago,
+            )
+            .scalar()
+            or 0
+        )
+
+        earlier_positive = (
+            session.query(func.count(SentimentAnalysis.id))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                SentimentAnalysis.sentiment_label == "positive",
+                func.date(SentimentAnalysis.analyzed_at) >= week_ago,
+                func.date(SentimentAnalysis.analyzed_at) < three_days_ago,
+            )
+            .scalar()
+            or 0
+        )
+
+        earlier_total = (
+            session.query(func.count(SentimentAnalysis.id))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= week_ago,
+                func.date(SentimentAnalysis.analyzed_at) < three_days_ago,
+            )
+            .scalar()
+            or 0
+        )
+
+        recent_pct = (recent_positive / recent_total * 100) if recent_total > 0 else 0
+        earlier_pct = (
+            (earlier_positive / earlier_total * 100) if earlier_total > 0 else 0
+        )
+
+        momentum_change = recent_pct - earlier_pct
+
+        if momentum_change > 5:
+            momentum = "improving"
+        elif momentum_change < -5:
+            momentum = "declining"
+        else:
+            momentum = "stable"
+
+        return {
+            "sentiment_momentum": momentum,
+            "momentum_change": round(momentum_change, 1),
+        }
+
+    def _get_keyword_rank(self, session, keyword: str) -> Dict[str, Any]:
+        """Get rank of this keyword by total posts vs other keywords."""
+        keyword_counts = (
+            session.query(
+                RawPost.search_keyword, func.count(RawPost.id).label("post_count")
+            )
+            .group_by(RawPost.search_keyword)
+            .order_by(func.count(RawPost.id).desc())
+            .all()
+        )
+
+        total_keywords = len(keyword_counts)
+        keyword_rank = 0
+
+        for i, (kw, count) in enumerate(keyword_counts, 1):
+            if kw == keyword:
+                keyword_rank = i
+                break
+
+        return {"keyword_rank": keyword_rank, "total_keywords": total_keywords}
+
+    def _get_daily_average(self, session, keyword: str) -> float:
+        """Get average posts per day for this keyword."""
+        from datetime import timedelta
+
+        thirty_days_ago = datetime.now(timezone.utc).date() - timedelta(days=30)
+
+        total_posts = (
+            session.query(func.count(RawPost.id))
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(RawPost.fetched_at) >= thirty_days_ago,
+            )
+            .scalar()
+            or 0
+        )
+
+        return round(total_posts / 30, 1)
+
+    def _get_peak_performance(self, session, keyword: str) -> Dict[str, Any]:
+        """Get the best sentiment day for this keyword."""
+        from datetime import timedelta
+
+        thirty_days_ago = datetime.now(timezone.utc).date() - timedelta(days=30)
+
+        daily_sentiment = (
+            session.query(
+                func.date(SentimentAnalysis.analyzed_at).label("date"),
+                func.avg(
+                    case(
+                        (SentimentAnalysis.sentiment_label == "positive", 1.0),
+                        (SentimentAnalysis.sentiment_label == "neutral", 0.5),
+                        else_=0.0,
+                    )
+                ).label("avg_sentiment"),
+                func.count(SentimentAnalysis.id).label("post_count"),
+            )
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= thirty_days_ago,
+            )
+            .group_by(func.date(SentimentAnalysis.analyzed_at))
+            .having(
+                func.count(SentimentAnalysis.id)
+                >= 5
+            )
+            .order_by(
+                func.avg(
+                    case(
+                        (SentimentAnalysis.sentiment_label == "positive", 1.0),
+                        (SentimentAnalysis.sentiment_label == "neutral", 0.5),
+                        else_=0.0,
+                    )
+                ).desc()
+            )
+            .first()
+        )
+
+        if daily_sentiment:
+            return {
+                "peak_sentiment": round(daily_sentiment.avg_sentiment * 100, 1),
+                "peak_date": daily_sentiment.date.strftime("%Y-%m-%d"),
+            }
+        else:
+            return {"peak_sentiment": 0.0, "peak_date": None}
 
 
 db_operations = None
