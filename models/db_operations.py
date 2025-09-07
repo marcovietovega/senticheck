@@ -442,6 +442,115 @@ class DatabaseOperations:
 
             return [(str(row.date), row.count) for row in result]
 
+    def get_keywords_with_counts(self) -> List[tuple]:
+        """
+        Get all available keywords with their analyzed post counts.
+        Only counts posts that have completed the full pipeline (sentiment analysis).
+
+        Returns:
+            List of tuples (keyword, count)
+        """
+        try:
+            with self.db_connection.get_session() as session:
+                result = (
+                    session.query(
+                        RawPost.search_keyword,
+                        func.count(SentimentAnalysis.id).label("post_count"),
+                    )
+                    .join(CleanedPost, RawPost.id == CleanedPost.raw_post_id)
+                    .join(
+                        SentimentAnalysis,
+                        CleanedPost.id == SentimentAnalysis.cleaned_post_id,
+                    )
+                    .filter(RawPost.search_keyword.isnot(None))
+                    .group_by(RawPost.search_keyword)
+                    .order_by(func.count(SentimentAnalysis.id).desc())
+                    .all()
+                )
+                return [(row.search_keyword, row.post_count) for row in result]
+        except Exception as e:
+            logger.error(f"Error getting keywords with counts: {e}")
+            return []
+
+    def get_keyword_specific_metrics(self, keyword: str) -> Dict[str, Any]:
+        """
+        Get sentiment metrics for a specific keyword.
+        Uses only analyzed posts (completed sentiment analysis pipeline).
+
+        Args:
+            keyword: The keyword to analyze
+
+        Returns:
+            Dictionary with keyword-specific metrics
+        """
+        try:
+            with self.db_connection.get_session() as session:
+                # Get sentiment counts and confidence for keyword using SQLAlchemy ORM
+                sentiment_result = (
+                    session.query(
+                        SentimentAnalysis.sentiment_label,
+                        func.count(SentimentAnalysis.id).label("count"),
+                        func.avg(SentimentAnalysis.confidence_score).label("avg_conf"),
+                    )
+                    .join(
+                        CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
+                    )
+                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+                    .filter(RawPost.search_keyword == keyword)
+                    .group_by(SentimentAnalysis.sentiment_label)
+                    .all()
+                )
+
+                total_posts = 0
+                sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}
+                total_confidence = 0
+
+                for row in sentiment_result:
+                    sentiment = row.sentiment_label
+                    count = row.count
+                    avg_conf = row.avg_conf or 0
+
+                    sentiment_counts[sentiment] = count
+                    total_posts += count
+                    total_confidence += avg_conf * count
+
+                # Get today's analyzed posts for this keyword using SQLAlchemy ORM
+                today = datetime.now(timezone.utc).date()
+                posts_today = (
+                    session.query(func.count(SentimentAnalysis.id))
+                    .join(
+                        CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
+                    )
+                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+                    .filter(RawPost.search_keyword == keyword)
+                    .filter(func.date(RawPost.created_at) == today)
+                    .scalar()
+                ) or 0
+
+                # Calculate percentages and average confidence
+                if total_posts > 0:
+                    positive_pct = sentiment_counts["positive"] / total_posts * 100
+                    negative_pct = sentiment_counts["negative"] / total_posts * 100
+                    neutral_pct = sentiment_counts["neutral"] / total_posts * 100
+                    avg_confidence = (
+                        total_confidence / total_posts if total_confidence > 0 else 0
+                    )
+                else:
+                    positive_pct = negative_pct = neutral_pct = avg_confidence = 0
+
+                return {
+                    "total_posts": total_posts,
+                    "positive_percentage": round(positive_pct, 1),
+                    "negative_percentage": round(negative_pct, 1),
+                    "neutral_percentage": round(neutral_pct, 1),
+                    "avg_confidence": round(avg_confidence * 100, 1),
+                    "posts_today": posts_today,
+                }
+
+        except Exception as e:
+            logger.error(f"Error getting keyword metrics for {keyword}: {e}")
+            return {}
+
 
 db_operations = None
 
