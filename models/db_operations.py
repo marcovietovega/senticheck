@@ -447,8 +447,13 @@ class DatabaseOperations:
             Count of today's posts
         """
         with self.db_connection.get_session() as session:
-            result = session.execute(text("SELECT get_today_posts_count()"))
-            return result.scalar() or 0
+            today = datetime.now(timezone.utc).date()
+            result = (
+                session.query(func.count(SentimentAnalysis.id))
+                .filter(func.date(SentimentAnalysis.analyzed_at) == today)
+                .scalar()
+            )
+            return int(result or 0)
 
     def get_posts_by_date_range(self, days: int) -> List[Tuple[str, int]]:
         """Get post counts by date for the last N days.
