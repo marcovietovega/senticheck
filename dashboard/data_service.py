@@ -145,7 +145,9 @@ class DashboardDataService:
         """
         return self.db_manager.get_today_posts_count()
 
-    def calculate_sentiment_trends(self) -> Dict[str, float]:
+    def calculate_sentiment_trends(
+        self, selected_keywords: Optional[List[str]] = None
+    ) -> Dict[str, float]:
         """
         Calculate sentiment trends compared to previous day.
 
@@ -153,8 +155,7 @@ class DashboardDataService:
             Dict with trend percentages for each sentiment
         """
         try:
-            return self.db_manager.calculate_sentiment_trends()
-
+            return self.db_manager.calculate_sentiment_trends(selected_keywords)
         except Exception as e:
             logger.error(f"Error calculating sentiment trends: {e}")
             return {"positive_trend": 0.0, "negative_trend": 0.0, "neutral_trend": 0.0}
@@ -207,7 +208,9 @@ class DashboardDataService:
             # Return empty DataFrame on error
             return pd.DataFrame(columns=["date", "positive", "negative", "neutral"])
 
-    def get_kpi_metrics(self, selected_keywords: Optional[List[str]] = None) -> Dict[str, Any]:
+    def get_kpi_metrics(
+        self, selected_keywords: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         """
         Get all KPI metrics for the dashboard, optionally filtered by keywords.
 
@@ -223,66 +226,22 @@ class DashboardDataService:
             return cached_data
 
         try:
-            if selected_keywords:
-                # Calculate metrics for selected keywords only
-                total_posts = 0
-                sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}
-                total_confidence = 0
-                posts_today = 0
-                
-                for keyword in selected_keywords:
-                    keyword_metrics = self.get_keyword_metrics(keyword)
-                    total_posts += keyword_metrics.get("total_posts", 0)
-                    
-                    # Get raw sentiment counts (reverse engineer from percentages)
-                    total_for_keyword = keyword_metrics.get("total_posts", 0)
-                    if total_for_keyword > 0:
-                        sentiment_counts["positive"] += int(keyword_metrics.get("positive_percentage", 0) / 100 * total_for_keyword)
-                        sentiment_counts["negative"] += int(keyword_metrics.get("negative_percentage", 0) / 100 * total_for_keyword)  
-                        sentiment_counts["neutral"] += int(keyword_metrics.get("neutral_percentage", 0) / 100 * total_for_keyword)
-                        total_confidence += (keyword_metrics.get("avg_confidence", 0) / 100) * total_for_keyword
-                        posts_today += keyword_metrics.get("posts_today", 0)
-                
-                # Calculate percentages
-                positive_pct = (sentiment_counts["positive"] / total_posts * 100) if total_posts > 0 else 0
-                negative_pct = (sentiment_counts["negative"] / total_posts * 100) if total_posts > 0 else 0  
-                neutral_pct = (sentiment_counts["neutral"] / total_posts * 100) if total_posts > 0 else 0
-                avg_confidence = (total_confidence / total_posts) if total_posts > 0 else 0
-                
-            else:
-                # Use existing methods for all keywords
-                stats = self.get_database_stats()
-                sentiment_dist = self.get_sentiment_distribution()
-                total_posts = sum(sentiment_dist.values())
-
-                positive_pct = (sentiment_dist["positive"] / total_posts * 100) if total_posts > 0 else 0
-                negative_pct = (sentiment_dist["negative"] / total_posts * 100) if total_posts > 0 else 0
-                neutral_pct = (sentiment_dist["neutral"] / total_posts * 100) if total_posts > 0 else 0
-                
-                avg_confidence = self.get_average_confidence()
-                posts_today = self.get_today_posts_count()
-
-            trends = self.calculate_sentiment_trends()
+            kpi_base = self.db_manager.get_unified_kpi_metrics(selected_keywords)
+            trends = self.db_manager.calculate_sentiment_trends(selected_keywords)
 
             yesterday_posts = self.get_posts_by_date(2)
-            yesterday_count = (
-                list(yesterday_posts.values())[-2]
-                if len(yesterday_posts.values()) >= 2
-                else 0
-            )
+            posts_data = list(yesterday_posts.values())
+            yesterday_count = posts_data[0] if len(posts_data) >= 2 else 0
+            posts_today = kpi_base["posts_today"]
+
             daily_trend = (
                 ((posts_today - yesterday_count) / yesterday_count * 100)
                 if yesterday_count > 0
-                else 0
+                else (100.0 if posts_today > 0 else 0.0)
             )
 
             kpi_data = {
-                "total_posts": total_posts if selected_keywords else stats.get("analyzed_posts", 0),
-                "positive_percentage": round(positive_pct, 1),
-                "negative_percentage": round(negative_pct, 1),
-                "neutral_percentage": round(neutral_pct, 1),
-                "avg_confidence": round(avg_confidence * 100, 1) if selected_keywords else avg_confidence,
-                "posts_today": posts_today,
+                **kpi_base,
                 "positive_trend": trends.get("positive_trend", 0.0),
                 "negative_trend": trends.get("negative_trend", 0.0),
                 "neutral_trend": trends.get("neutral_trend", 0.0),
@@ -295,7 +254,6 @@ class DashboardDataService:
 
         except Exception as e:
             logger.error(f"Error getting KPI metrics: {e}")
-            # Return default values
             return {
                 "total_posts": 0,
                 "positive_percentage": 0.0,
@@ -356,7 +314,7 @@ class DashboardDataService:
     def get_available_keywords(self) -> Dict[str, int]:
         """
         Get all available keywords from the database with their post counts.
-        
+
         Returns:
             Dict mapping keyword to post count
         """
@@ -364,19 +322,21 @@ class DashboardDataService:
         cached_data = self._get_cached_data(cache_key)
         if cached_data:
             return cached_data
-        
+
         try:
             # Get keywords with counts from database
             keywords_data = self.db_manager.get_keywords_with_counts()
-            
+
             # Convert to dict format
-            keywords_dict = {
-                keyword: count for keyword, count in keywords_data
-            } if keywords_data else {"AI": 0}  # Fallback to AI if no data
-            
+            keywords_dict = (
+                {keyword: count for keyword, count in keywords_data}
+                if keywords_data
+                else {"AI": 0}
+            )  # Fallback to AI if no data
+
             self._set_cache_data(cache_key, keywords_dict)
             return keywords_dict
-            
+
         except Exception as e:
             logger.error(f"Error getting available keywords: {e}")
             return {"AI": 0}  # Fallback default
@@ -384,10 +344,10 @@ class DashboardDataService:
     def get_keyword_metrics(self, keyword: str) -> Dict[str, Any]:
         """
         Get metrics for a specific keyword.
-        
+
         Args:
             keyword: The keyword to analyze
-            
+
         Returns:
             Dict with keyword-specific metrics
         """
@@ -395,24 +355,24 @@ class DashboardDataService:
         cached_data = self._get_cached_data(cache_key)
         if cached_data:
             return cached_data
-        
+
         try:
             # Get keyword-specific data
             keyword_data = self.db_manager.get_keyword_specific_metrics(keyword)
-            
+
             if not keyword_data:
                 return {
                     "total_posts": 0,
                     "positive_percentage": 0,
-                    "negative_percentage": 0, 
+                    "negative_percentage": 0,
                     "neutral_percentage": 0,
                     "avg_confidence": 0,
-                    "posts_today": 0
+                    "posts_today": 0,
                 }
-            
+
             self._set_cache_data(cache_key, keyword_data)
             return keyword_data
-            
+
         except Exception as e:
             logger.error(f"Error getting keyword metrics for {keyword}: {e}")
             return {
@@ -421,7 +381,7 @@ class DashboardDataService:
                 "negative_percentage": 0,
                 "neutral_percentage": 0,
                 "avg_confidence": 0,
-                "posts_today": 0
+                "posts_today": 0,
             }
 
 
