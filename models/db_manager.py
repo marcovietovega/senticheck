@@ -207,10 +207,9 @@ class SentiCheckDBManager:
                         min_content_words=min_content_words,
                     )
 
-                    # Check if post was filtered out
                     if cleaned_post is None:
                         filtered_count += 1
-                        # Mark the raw post as processed even if filtered
+
                         with self.db_ops.db_connection.get_session() as session:
                             raw_post_obj = (
                                 session.query(RawPost).filter_by(id=raw_post.id).first()
@@ -220,14 +219,13 @@ class SentiCheckDBManager:
                         continue
 
                     if cleaned_post.get("text", "").strip():
-                        # Add metadata
+
                         cleaning_metadata = {
                             "cleaned_at": datetime.now().isoformat(),
                             "filter_hashtag_only": filter_hashtag_only,
                             "min_content_words": min_content_words,
                         }
 
-                        # Include content analysis
                         if "content_analysis" in cleaned_post:
                             cleaning_metadata["content_analysis"] = cleaned_post[
                                 "content_analysis"
@@ -440,44 +438,64 @@ class SentiCheckDBManager:
             logger.error(f"Error getting sentiment over time: {e}")
             return []
 
-    def calculate_sentiment_trends(self) -> Dict[str, float]:
+    def calculate_sentiment_trends(
+        self, selected_keywords: Optional[List[str]] = None
+    ) -> Dict[str, float]:
         """
-        Calculate sentiment trends compared to previous day.
+        Calculate sentiment trends compared to previous day, optionally filtered by keywords.
+
+        Args:
+            selected_keywords: Optional list of keywords to filter by. None for all keywords.
 
         Returns:
             Dict with trend percentages for each sentiment
         """
         try:
-
             today = datetime.now(timezone.utc).date()
             yesterday = today - timedelta(days=1)
 
             with self.db_ops.db_connection.get_session() as session:
-                # Get today's sentiment counts
-                today_result = (
+                # Base query for today's sentiment counts
+                today_query = (
                     session.query(
                         SentimentAnalysis.sentiment_label,
                         func.count(SentimentAnalysis.id).label("count"),
                     )
-                    .join(CleanedPost)
-                    .join(RawPost)
+                    .join(
+                        CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
+                    )
+                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
                     .filter(func.date(RawPost.created_at) == today)
-                    .group_by(SentimentAnalysis.sentiment_label)
-                    .all()
                 )
 
-                # Get yesterday's sentiment counts
-                yesterday_result = (
+                # Base query for yesterday's sentiment counts
+                yesterday_query = (
                     session.query(
                         SentimentAnalysis.sentiment_label,
                         func.count(SentimentAnalysis.id).label("count"),
                     )
-                    .join(CleanedPost)
-                    .join(RawPost)
+                    .join(
+                        CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
+                    )
+                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
                     .filter(func.date(RawPost.created_at) == yesterday)
-                    .group_by(SentimentAnalysis.sentiment_label)
-                    .all()
                 )
+
+                # Apply keyword filtering if specified
+                if selected_keywords is not None and selected_keywords:
+                    today_query = today_query.filter(
+                        RawPost.search_keyword.in_(selected_keywords)
+                    )
+                    yesterday_query = yesterday_query.filter(
+                        RawPost.search_keyword.in_(selected_keywords)
+                    )
+
+                today_result = today_query.group_by(
+                    SentimentAnalysis.sentiment_label
+                ).all()
+                yesterday_result = yesterday_query.group_by(
+                    SentimentAnalysis.sentiment_label
+                ).all()
 
                 today_counts = {sentiment: count for sentiment, count in today_result}
                 yesterday_counts = {
@@ -607,7 +625,7 @@ class SentiCheckDBManager:
     def get_keywords_with_counts(self) -> List[tuple]:
         """
         Get all available keywords with their post counts.
-        
+
         Returns:
             List of tuples (keyword, count)
         """
@@ -620,10 +638,10 @@ class SentiCheckDBManager:
     def get_keyword_specific_metrics(self, keyword: str) -> Dict[str, Any]:
         """
         Get sentiment metrics for a specific keyword.
-        
+
         Args:
             keyword: The keyword to analyze
-            
+
         Returns:
             Dictionary with keyword-specific metrics
         """
@@ -632,6 +650,22 @@ class SentiCheckDBManager:
         except Exception as e:
             logger.error(f"Error getting keyword metrics for {keyword}: {e}")
             return {}
+
+    def get_unified_kpi_metrics(
+        self, selected_keywords: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        try:
+            return self.db_ops.get_unified_kpi_metrics(selected_keywords)
+        except Exception as e:
+            logger.error(f"Error getting unified KPI metrics: {e}")
+            return {
+                "total_posts": 0,
+                "positive_percentage": 0.0,
+                "negative_percentage": 0.0,
+                "neutral_percentage": 0.0,
+                "avg_confidence": 0.0,
+                "posts_today": 0,
+            }
 
 
 db_manager = None
