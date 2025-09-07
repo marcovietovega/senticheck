@@ -604,6 +604,35 @@ class SentiCheckDBManager:
             logger.error(f"Error getting posts by date: {e}")
             return {}
 
+    def get_keywords_with_counts(self) -> List[tuple]:
+        """
+        Get all available keywords with their post counts.
+        
+        Returns:
+            List of tuples (keyword, count)
+        """
+        try:
+            return self.db_ops.get_keywords_with_counts()
+        except Exception as e:
+            logger.error(f"Error getting keywords with counts: {e}")
+            return []
+
+    def get_keyword_specific_metrics(self, keyword: str) -> Dict[str, Any]:
+        """
+        Get sentiment metrics for a specific keyword.
+        
+        Args:
+            keyword: The keyword to analyze
+            
+        Returns:
+            Dictionary with keyword-specific metrics
+        """
+        try:
+            return self.db_ops.get_keyword_specific_metrics(keyword)
+        except Exception as e:
+            logger.error(f"Error getting keyword metrics for {keyword}: {e}")
+            return {}
+
 
 db_manager = None
 
