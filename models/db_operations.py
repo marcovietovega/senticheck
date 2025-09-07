@@ -391,17 +391,40 @@ class DatabaseOperations:
             List of dictionaries containing sentiment data over time
         """
         with self.db_connection.get_session() as session:
-            result = session.execute(
-                text("SELECT * FROM get_sentiment_over_time(:days)"), {"days": days}
+            end_date = datetime.now(timezone.utc).date()
+            start_date = end_date - timedelta(days=days)
+
+            result = (
+                session.query(
+                    func.date(SentimentAnalysis.analyzed_at).label("date"),
+                    func.count(
+                        func.case(
+                            [(SentimentAnalysis.sentiment_label == "positive", 1)]
+                        )
+                    ).label("positive"),
+                    func.count(
+                        func.case(
+                            [(SentimentAnalysis.sentiment_label == "negative", 1)]
+                        )
+                    ).label("negative"),
+                    func.count(
+                        func.case([(SentimentAnalysis.sentiment_label == "neutral", 1)])
+                    ).label("neutral"),
+                )
+                .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
+                .group_by(func.date(SentimentAnalysis.analyzed_at))
+                .order_by(func.date(SentimentAnalysis.analyzed_at))
+                .all()
             )
+
             return [
                 {
-                    "date": r.date,
-                    "positive": r.positive,
-                    "negative": r.negative,
-                    "neutral": r.neutral,
+                    "date": row.date,
+                    "positive": row.positive,
+                    "negative": row.negative,
+                    "neutral": row.neutral,
                 }
-                for r in result
+                for row in result
             ]
 
     def get_average_confidence(self) -> float:
