@@ -13,6 +13,7 @@ sys.path.insert(0, str(parent_dir))
 from dashboard.charts import render_sentiment_over_time_chart
 from dashboard.styles import apply_styles, apply_dropdown_styles
 from dashboard.data_service import get_dashboard_data_service
+from dashboard.components import render_keyword_selector
 
 
 def configure_page():
@@ -76,13 +77,18 @@ def render_metric_card(
 
 def render_kpi_section():
     """Render the KPI section with key sentiment metrics."""
-    st.header("Key Performance Indicators")
+    selected_keywords = st.session_state.get("selected_keywords", None)
+    
+    if selected_keywords:
+        keyword_text = ", ".join(selected_keywords) if len(selected_keywords) <= 3 else f"{len(selected_keywords)} keywords"
+        st.header(f"Key Performance Indicators - {keyword_text}")
+    else:
+        st.header("Key Performance Indicators - All Keywords")
     st.markdown("---")
 
-    # Get data service
     try:
         data_service = get_dashboard_data_service()
-        kpi_data = data_service.get_kpi_metrics()
+        kpi_data = data_service.get_kpi_metrics(selected_keywords)
 
         col1, col2, col3 = st.columns(3, gap="medium")
 
@@ -199,6 +205,14 @@ def main():
     apply_dropdown_styles()
 
     render_page_title()
+    
+    selected_keywords = render_keyword_selector()
+    
+    if selected_keywords:
+        st.session_state["selected_keywords"] = selected_keywords
+    else:
+        st.session_state["selected_keywords"] = None
+    
     render_kpi_section()
     render_chart_section()
 
