@@ -85,6 +85,7 @@ class SentimentAnalysis(Base):
     analyzed_at = Column(
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
+    search_keyword = Column(String(255), nullable=True, index=True)
     cleaned_post = relationship("CleanedPost", back_populates="sentiment_analysis")
 
     def __repr__(self):

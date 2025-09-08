@@ -227,6 +227,7 @@ class DatabaseOperations:
         neutral_score: float = None,
         model_name: str = "unknown",
         model_version: str = None,
+        search_keyword: str = None,
     ) -> Optional[int]:
         """
         Store sentiment analysis results.
@@ -246,6 +247,12 @@ class DatabaseOperations:
         """
         try:
             with self.db_connection.get_session() as session:
+                # Get search_keyword from raw_post if not provided
+                if search_keyword is None:
+                    cleaned_post = session.query(CleanedPost).filter_by(id=cleaned_post_id).first()
+                    if cleaned_post and cleaned_post.raw_post:
+                        search_keyword = cleaned_post.raw_post.search_keyword
+                
                 sentiment_analysis = SentimentAnalysis(
                     cleaned_post_id=cleaned_post_id,
                     sentiment_label=sentiment_label,
@@ -255,6 +262,7 @@ class DatabaseOperations:
                     neutral_score=neutral_score,
                     model_name=model_name,
                     model_version=model_version,
+                    search_keyword=search_keyword,
                 )
 
                 session.add(sentiment_analysis)
@@ -298,6 +306,17 @@ class DatabaseOperations:
         with self.db_connection.get_session() as session:
             for result in sentiment_results:
                 try:
+                    # Get search_keyword from result or fetch from raw_post
+                    search_keyword = result.get("search_keyword")
+                    if search_keyword is None:
+                        cleaned_post = (
+                            session.query(CleanedPost)
+                            .filter_by(id=result["cleaned_post_id"])
+                            .first()
+                        )
+                        if cleaned_post and cleaned_post.raw_post:
+                            search_keyword = cleaned_post.raw_post.search_keyword
+                    
                     sentiment_analysis = SentimentAnalysis(
                         cleaned_post_id=result["cleaned_post_id"],
                         sentiment_label=result["sentiment_label"],
@@ -307,6 +326,7 @@ class DatabaseOperations:
                         neutral_score=result.get("neutral_score"),
                         model_name=result.get("model_name", "unknown"),
                         model_version=result.get("model_version"),
+                        search_keyword=search_keyword,
                     )
 
                     session.add(sentiment_analysis)
@@ -493,16 +513,11 @@ class DatabaseOperations:
             with self.db_connection.get_session() as session:
                 result = (
                     session.query(
-                        RawPost.search_keyword,
+                        SentimentAnalysis.search_keyword,
                         func.count(SentimentAnalysis.id).label("post_count"),
                     )
-                    .select_from(SentimentAnalysis)
-                    .join(
-                        CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
-                    )
-                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
-                    .filter(RawPost.search_keyword.isnot(None))
-                    .group_by(RawPost.search_keyword)
+                    .filter(SentimentAnalysis.search_keyword.isnot(None))
+                    .group_by(SentimentAnalysis.search_keyword)
                     .order_by(func.count(SentimentAnalysis.id).desc())
                     .all()
                 )
@@ -529,12 +544,7 @@ class DatabaseOperations:
                         func.count(SentimentAnalysis.id).label("count"),
                         func.avg(SentimentAnalysis.confidence_score).label("avg_conf"),
                     )
-                    .select_from(SentimentAnalysis)
-                    .join(
-                        CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
-                    )
-                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
-                    .filter(RawPost.search_keyword == keyword)
+                    .filter(SentimentAnalysis.search_keyword == keyword)
                     .group_by(SentimentAnalysis.sentiment_label)
                     .all()
                 )
@@ -555,12 +565,7 @@ class DatabaseOperations:
                 today = datetime.now(timezone.utc).date()
                 posts_today = (
                     session.query(func.count(SentimentAnalysis.id))
-                    .select_from(SentimentAnalysis)
-                    .join(
-                        CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
-                    )
-                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
-                    .filter(RawPost.search_keyword == keyword)
+                    .filter(SentimentAnalysis.search_keyword == keyword)
                     .filter(func.date(SentimentAnalysis.analyzed_at) == today)
                     .scalar()
                 ) or 0
@@ -608,17 +613,12 @@ class DatabaseOperations:
                     SentimentAnalysis.sentiment_label,
                     func.count(SentimentAnalysis.id).label("count"),
                     func.avg(SentimentAnalysis.confidence_score).label("avg_conf"),
-                ).select_from(SentimentAnalysis)
+                )
 
-                # Add JOINs and keyword filtering if needed
+                # Add keyword filtering if needed
                 if selected_keywords is not None and selected_keywords:
-                    base_query = (
-                        base_query.join(
-                            CleanedPost,
-                            SentimentAnalysis.cleaned_post_id == CleanedPost.id,
-                        )
-                        .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
-                        .filter(RawPost.search_keyword.in_(selected_keywords))
+                    base_query = base_query.filter(
+                        SentimentAnalysis.search_keyword.in_(selected_keywords)
                     )
 
                 sentiment_result = base_query.group_by(
@@ -639,24 +639,16 @@ class DatabaseOperations:
                     total_confidence_weighted += avg_conf * count
 
                 today = datetime.now().date()
-                today_query = session.query(
-                    func.count(SentimentAnalysis.id)
-                ).select_from(SentimentAnalysis)
+                today_query = session.query(func.count(SentimentAnalysis.id))
 
                 if selected_keywords is not None and selected_keywords:
-                    today_query = (
-                        today_query.join(
-                            CleanedPost,
-                            SentimentAnalysis.cleaned_post_id == CleanedPost.id,
-                        )
-                        .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
-                        .filter(RawPost.search_keyword.in_(selected_keywords))
-                        .filter(func.date(SentimentAnalysis.analyzed_at) == today)
-                    )
-                else:
                     today_query = today_query.filter(
-                        func.date(SentimentAnalysis.analyzed_at) == today
+                        SentimentAnalysis.search_keyword.in_(selected_keywords)
                     )
+                
+                today_query = today_query.filter(
+                    func.date(SentimentAnalysis.analyzed_at) == today
+                )
 
                 posts_today = today_query.scalar() or 0
 
@@ -749,10 +741,8 @@ class DatabaseOperations:
 
         this_week = (
             session.query(func.count(SentimentAnalysis.id))
-            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
-            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
             .filter(
-                RawPost.search_keyword == keyword,
+                SentimentAnalysis.search_keyword == keyword,
                 func.date(SentimentAnalysis.analyzed_at) >= week_start,
             )
             .scalar()
@@ -761,10 +751,8 @@ class DatabaseOperations:
 
         last_week = (
             session.query(func.count(SentimentAnalysis.id))
-            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
-            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
             .filter(
-                RawPost.search_keyword == keyword,
+                SentimentAnalysis.search_keyword == keyword,
                 func.date(SentimentAnalysis.analyzed_at) >= last_week_start,
                 func.date(SentimentAnalysis.analyzed_at) < week_start,
             )
@@ -784,9 +772,7 @@ class DatabaseOperations:
         """Get average confidence score for this keyword."""
         confidence = (
             session.query(func.avg(SentimentAnalysis.confidence_score))
-            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
-            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
-            .filter(RawPost.search_keyword == keyword)
+            .filter(SentimentAnalysis.search_keyword == keyword)
             .scalar()
         )
 
@@ -802,10 +788,8 @@ class DatabaseOperations:
 
         recent_positive = (
             session.query(func.count(SentimentAnalysis.id))
-            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
-            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
             .filter(
-                RawPost.search_keyword == keyword,
+                SentimentAnalysis.search_keyword == keyword,
                 SentimentAnalysis.sentiment_label == "positive",
                 func.date(SentimentAnalysis.analyzed_at) >= three_days_ago,
             )
@@ -815,10 +799,8 @@ class DatabaseOperations:
 
         recent_total = (
             session.query(func.count(SentimentAnalysis.id))
-            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
-            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
             .filter(
-                RawPost.search_keyword == keyword,
+                SentimentAnalysis.search_keyword == keyword,
                 func.date(SentimentAnalysis.analyzed_at) >= three_days_ago,
             )
             .scalar()
@@ -827,10 +809,8 @@ class DatabaseOperations:
 
         earlier_positive = (
             session.query(func.count(SentimentAnalysis.id))
-            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
-            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
             .filter(
-                RawPost.search_keyword == keyword,
+                SentimentAnalysis.search_keyword == keyword,
                 SentimentAnalysis.sentiment_label == "positive",
                 func.date(SentimentAnalysis.analyzed_at) >= week_ago,
                 func.date(SentimentAnalysis.analyzed_at) < three_days_ago,
@@ -841,10 +821,8 @@ class DatabaseOperations:
 
         earlier_total = (
             session.query(func.count(SentimentAnalysis.id))
-            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
-            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
             .filter(
-                RawPost.search_keyword == keyword,
+                SentimentAnalysis.search_keyword == keyword,
                 func.date(SentimentAnalysis.analyzed_at) >= week_ago,
                 func.date(SentimentAnalysis.analyzed_at) < three_days_ago,
             )

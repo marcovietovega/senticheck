@@ -380,17 +380,13 @@ class SentiCheckDBManager:
         """
         try:
             with self.db_ops.db_connection.get_session() as session:
-                base_query = (
-                    session.query(
-                        SentimentAnalysis.sentiment_label,
-                        func.count(SentimentAnalysis.id).label("count"),
-                    )
-                    .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
-                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+                base_query = session.query(
+                    SentimentAnalysis.sentiment_label,
+                    func.count(SentimentAnalysis.id).label("count"),
                 )
 
                 if selected_keywords is not None and selected_keywords:
-                    base_query = base_query.filter(RawPost.search_keyword.in_(selected_keywords))
+                    base_query = base_query.filter(SentimentAnalysis.search_keyword.in_(selected_keywords))
 
                 results = base_query.group_by(SentimentAnalysis.sentiment_label).all()
 
@@ -494,14 +490,12 @@ class SentiCheckDBManager:
                         SentimentAnalysis.sentiment_label,
                         func.count(SentimentAnalysis.id).label("count"),
                     )
-                    .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
-                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
                     .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
                     .filter(func.date(SentimentAnalysis.analyzed_at) <= end_date)
                 )
 
                 if selected_keywords is not None and selected_keywords:
-                    base_query = base_query.filter(RawPost.search_keyword.in_(selected_keywords))
+                    base_query = base_query.filter(SentimentAnalysis.search_keyword.in_(selected_keywords))
 
                 results = base_query.group_by(
                     func.date(SentimentAnalysis.analyzed_at),
@@ -549,11 +543,7 @@ class SentiCheckDBManager:
                         SentimentAnalysis.sentiment_label,
                         func.count(SentimentAnalysis.id).label("count"),
                     )
-                    .join(
-                        CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
-                    )
-                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
-                    .filter(func.date(RawPost.created_at) == today)
+                    .filter(func.date(SentimentAnalysis.analyzed_at) == today)
                 )
 
                 yesterday_query = (
@@ -561,19 +551,15 @@ class SentiCheckDBManager:
                         SentimentAnalysis.sentiment_label,
                         func.count(SentimentAnalysis.id).label("count"),
                     )
-                    .join(
-                        CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id
-                    )
-                    .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
-                    .filter(func.date(RawPost.created_at) == yesterday)
+                    .filter(func.date(SentimentAnalysis.analyzed_at) == yesterday)
                 )
 
                 if selected_keywords is not None and selected_keywords:
                     today_query = today_query.filter(
-                        RawPost.search_keyword.in_(selected_keywords)
+                        SentimentAnalysis.search_keyword.in_(selected_keywords)
                     )
                     yesterday_query = yesterday_query.filter(
-                        RawPost.search_keyword.in_(selected_keywords)
+                        SentimentAnalysis.search_keyword.in_(selected_keywords)
                     )
 
                 today_result = today_query.group_by(
