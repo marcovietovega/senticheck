@@ -6,5 +6,6 @@ This package contains reusable UI components for the SentiCheck dashboard.
 """
 
 from .keyword_selector import render_keyword_selector
+from .insights_section import render_insights_section
 
-__all__ = ["render_keyword_selector"]
+__all__ = ["render_keyword_selector", "render_insights_section"]
