@@ -16,7 +16,7 @@ from dashboard.charts import (
 )
 from dashboard.styles import apply_styles, apply_dropdown_styles
 from dashboard.data_service import get_dashboard_data_service
-from dashboard.components import render_keyword_selector
+from dashboard.components import render_keyword_selector, render_insights_section
 
 
 def configure_page():
@@ -330,6 +330,9 @@ def main():
         st.session_state["selected_keywords"] = None
 
     render_kpi_section(selected_keywords)
+
+    render_insights_section(selected_keywords)
+
     render_chart_section()
 
 
