@@ -765,6 +765,19 @@ class SentiCheckDBManager:
         """
         return self.db_ops.get_keyword_specific_kpis(selected_keyword)
 
+    def get_keyword_insights(self, selected_keywords: Optional[List[str]], days: int = 7) -> Dict[str, Any]:
+        """
+        Get keyword insights by delegating to DatabaseOperations.
+        
+        Args:
+            selected_keywords: List of keywords to analyze, None for all
+            days: Number of days to analyze (7, 15, or 30)
+            
+        Returns:
+            Dictionary with insights data
+        """
+        return self.db_ops.get_keyword_insights(selected_keywords, days)
+
 
 db_manager = None
 
