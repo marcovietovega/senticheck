@@ -8,6 +8,13 @@ from typing import Optional, List, Dict, Any
 import logging
 
 from dashboard.data_service import get_dashboard_data_service
+from dashboard.styles import (
+    get_trend_icon,
+    get_rank_style,
+    get_confidence_quality,
+    format_time_12h,
+    format_date_short,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +69,7 @@ def render_single_keyword_insights(keyword: str):
 
     except Exception as e:
         logger.error(f"Error rendering single keyword insights for {keyword}: {e}")
-        st.error(f"❌ Error loading insights for {keyword}: {e}")
+        st.error(f"Error loading insights for {keyword}: {e}")
 
 
 def render_multi_keyword_insights(keywords: List[str]):
@@ -106,7 +113,7 @@ def render_multi_keyword_insights(keywords: List[str]):
 
     except Exception as e:
         logger.error(f"Error rendering multi keyword insights: {e}")
-        st.error(f"❌ Error loading comparative insights: {e}")
+        st.error(f"Error loading comparative insights: {e}")
 
 
 def render_platform_insights():
@@ -142,36 +149,24 @@ def render_platform_insights():
 
     except Exception as e:
         logger.error(f"Error rendering platform insights: {e}")
-        st.error("❌ Error loading platform insights.")
+        st.error("Error loading platform insights.")
 
 
 def render_trend_analysis_card(trend_data: Dict[str, Any]):
     """Render trend analysis card for single keyword."""
     current_sentiment = trend_data.get("current_sentiment", 0)
     sentiment_change = trend_data.get("sentiment_change", 0)
+
+    trend_icon = get_trend_icon(sentiment_change)
     if sentiment_change > 2:
-        trend_icon = "📈"
         trend_direction = "Improving"
     elif sentiment_change < -2:
-        trend_icon = "📉"
         trend_direction = "Declining"
     else:
-        trend_icon = "➡️"
         trend_direction = "Stable"
 
-    def format_date(date_str):
-        if not date_str or date_str == "N/A":
-            return "N/A"
-        try:
-            from datetime import datetime
-
-            date_obj = datetime.strptime(str(date_str), "%Y-%m-%d")
-            return date_obj.strftime("%b %d")
-        except:
-            return str(date_str)
-
-    best_day = format_date(trend_data.get("best_day", "N/A"))
-    worst_day = format_date(trend_data.get("worst_day", "N/A"))
+    best_day = format_date_short(trend_data.get("best_day", "N/A"))
+    worst_day = format_date_short(trend_data.get("worst_day", "N/A"))
 
     card_html = f"""
     <div class="metric-card metric-card-insights">
@@ -181,8 +176,8 @@ def render_trend_analysis_card(trend_data: Dict[str, Any]):
         </div>
         <div class="metric-value">{current_sentiment:.1f}%</div>
         <div class="metric-delta">{sentiment_change:+.1f}% {trend_direction.lower()}</div>
-        <div style="margin-top: 12px; font-size: 12px; color: #666; line-height: 1.4; padding: 0 2px;">
-            <div style="margin-bottom: 2px;">📅 Best: {best_day} ({trend_data.get('best_sentiment', 0):.1f}%)</div>
+        <div class="insight-card-details">
+            <div class="insight-best-worst">📅 Best: {best_day} ({trend_data.get('best_sentiment', 0):.1f}%)</div>
             <div>📉 Worst: {worst_day} ({trend_data.get('worst_sentiment', 0):.1f}%)</div>
         </div>
     </div>
@@ -197,22 +192,10 @@ def render_volume_stats_card(volume_data: Dict[str, Any]):
     total_keywords = volume_data.get("total_keywords", 0)
     daily_average = volume_data.get("daily_average", 0)
 
-    if keyword_rank <= 3 and total_keywords >= 5:
-        rank_icon = "🏆"
-        rank_context = "Top performer"
-        rank_color = "#059669"
-    elif keyword_rank <= total_keywords * 0.3:
-        rank_icon = "🥇"
-        rank_context = "High volume"
-        rank_color = "#2563eb"
-    elif keyword_rank <= total_keywords * 0.7:
-        rank_icon = "📊"
-        rank_context = "Moderate volume"
-        rank_color = "#6b7280"
-    else:
-        rank_icon = "📉"
-        rank_context = "Low volume"
-        rank_color = "#d97706"
+    rank_info = get_rank_style(keyword_rank, total_keywords)
+    rank_icon = rank_info["icon"]
+    rank_context = rank_info["context"]
+    rank_color = rank_info["color"]
 
     card_html = f"""
     <div class="metric-card metric-card-insights">
@@ -222,7 +205,7 @@ def render_volume_stats_card(volume_data: Dict[str, Any]):
         </div>
         <div class="metric-value">{total_posts:,} posts</div>
         <div class="metric-delta">Rank #{keyword_rank} of {total_keywords}</div>
-        <div style="margin-top: 12px; font-size: 12px; color: {rank_color}; font-weight: 500; padding: 0 2px;">
+        <div class="insight-card-details insight-rank-info" style="color: {rank_color};">
             {rank_icon} {rank_context} • {daily_average:.1f}/day
         </div>
     </div>
@@ -234,22 +217,10 @@ def render_performance_metrics_card(performance_data: Dict[str, Any]):
     """Render performance metrics card for single keyword."""
     avg_confidence = performance_data.get("avg_confidence", 0)
 
-    if avg_confidence >= 85:
-        quality_rating = "excellent"
-        quality_icon = "🎯"
-        quality_color = "#059669"
-    elif avg_confidence >= 75:
-        quality_rating = "good"
-        quality_icon = "⭐"
-        quality_color = "#2563eb"
-    elif avg_confidence >= 65:
-        quality_rating = "fair"
-        quality_icon = "⚠️"
-        quality_color = "#d97706"
-    else:
-        quality_rating = "poor"
-        quality_icon = "⚡"
-        quality_color = "#dc2626"
+    quality_info = get_confidence_quality(avg_confidence)
+    quality_rating = quality_info["rating"]
+    quality_icon = quality_info["icon"]
+    quality_color = quality_info["color"]
 
     card_html = f"""
     <div class="metric-card metric-card-insights">
@@ -259,7 +230,7 @@ def render_performance_metrics_card(performance_data: Dict[str, Any]):
         </div>
         <div class="metric-value">{avg_confidence:.1f}%</div>
         <div class="metric-delta">Confidence Score</div>
-        <div style="margin-top: 12px; font-size: 12px; color: {quality_color}; font-weight: 500; padding: 0 2px;">
+        <div class="insight-card-details insight-rank-info" style="color: {quality_color};">
             {quality_icon} Quality: {quality_rating.title()}
         </div>
     </div>
@@ -271,23 +242,7 @@ def render_activity_patterns_card(activity_data: Dict[str, Any]):
     """Render activity patterns card for single keyword."""
     peak_hours = activity_data.get("peak_hours", [])
 
-    def format_time(time_str):
-        if not time_str or time_str == "N/A":
-            return "N/A"
-        try:
-            hour = int(time_str.split(":")[0])
-            if hour == 0:
-                return "12 AM"
-            elif hour < 12:
-                return f"{hour} AM"
-            elif hour == 12:
-                return "12 PM"
-            else:
-                return f"{hour - 12} PM"
-        except:
-            return str(time_str)
-
-    formatted_times = [format_time(hour) for hour in peak_hours]
+    formatted_times = [format_time_12h(hour) for hour in peak_hours]
     peak_text = (
         ", ".join(formatted_times)
         if formatted_times and formatted_times != ["N/A"]
@@ -302,7 +257,7 @@ def render_activity_patterns_card(activity_data: Dict[str, Any]):
         </div>
         <div class="metric-value">{peak_text}</div>
         <div class="metric-delta">Peak posting times</div>
-        <div style="margin-top: 12px; font-size: 12px; color: #666; padding: 0 2px;">
+        <div class="insight-card-details">
             📊 Period: {activity_data.get('analysis_period', 'N/A')}
         </div>
     </div>
@@ -320,7 +275,7 @@ def render_comparison_trend_card(trend_data: Dict[str, Any], keywords: List[str]
         </div>
         <div class="metric-value">{trend_data.get('selected_count', 0)} keywords</div>
         <div class="metric-delta">Selected for comparison</div>
-        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+        <div class="insight-card-details">
             🔍 Keywords: {', '.join(keywords[:2])}{'...' if len(keywords) > 2 else ''}
         </div>
     </div>
@@ -338,7 +293,7 @@ def render_comparison_volume_card(volume_data: Dict[str, Any], keywords: List[st
         </div>
         <div class="metric-value">{volume_data.get('total_posts', 0):,} posts</div>
         <div class="metric-delta">Total across keywords</div>
-        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+        <div class="insight-card-details">
             🏆 Top: {volume_data.get('top_performer', 'N/A')} ({volume_data.get('top_posts', 0):,})
         </div>
     </div>
@@ -358,7 +313,7 @@ def render_comparison_performance_card(
         </div>
         <div class="metric-value">{performance_data.get('avg_sentiment', 0):.1f}%</div>
         <div class="metric-delta">Average sentiment</div>
-        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+        <div class="insight-card-details">
             🥇 Best: {performance_data.get('best_sentiment_keyword', 'N/A')} ({performance_data.get('best_sentiment_score', 0):.1f}%)
         </div>
     </div>
@@ -376,7 +331,7 @@ def render_comparison_activity_card(activity_data: Dict[str, Any], keywords: Lis
         </div>
         <div class="metric-value">{len(keywords)} keywords</div>
         <div class="metric-delta">Analyzed together</div>
-        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+        <div class="insight-card-details">
             📊 Period: {activity_data.get('analysis_period', 'N/A')}
         </div>
     </div>
@@ -394,7 +349,7 @@ def render_platform_trend_card(trend_data: Dict[str, Any]):
         </div>
         <div class="metric-value">{trend_data.get('platform_sentiment', 0):.1f}%</div>
         <div class="metric-delta">Overall positive sentiment</div>
-        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+        <div class="insight-card-details">
             🌐 Analysis: {trend_data.get('analysis_type', 'platform_wide').replace('_', ' ').title()}
         </div>
     </div>
@@ -412,7 +367,7 @@ def render_platform_volume_card(volume_data: Dict[str, Any]):
         </div>
         <div class="metric-value">{volume_data.get('total_posts', 0):,} posts</div>
         <div class="metric-delta">Daily avg: {volume_data.get('daily_average', 0):.1f}</div>
-        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+        <div class="insight-card-details">
             🔥 Top: {', '.join(volume_data.get('top_keywords', [])[:2])}
         </div>
     </div>
@@ -432,7 +387,7 @@ def render_platform_performance_card(performance_data: Dict[str, Any]):
         </div>
         <div class="metric-value">{performance_data.get('platform_health', 'unknown').title()}</div>
         <div class="metric-delta">{health_icon} Overall status</div>
-        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+        <div class="insight-card-details">
             🏷️ Keywords: {performance_data.get('total_keywords', 0)} active
         </div>
     </div>
@@ -450,7 +405,7 @@ def render_platform_activity_card(activity_data: Dict[str, Any]):
         </div>
         <div class="metric-value">All Keywords</div>
         <div class="metric-delta">Platform-wide analysis</div>
-        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+        <div class="insight-card-details">
             📊 Period: {activity_data.get('analysis_period', 'N/A')}
         </div>
     </div>
