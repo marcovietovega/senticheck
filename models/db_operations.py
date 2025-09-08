@@ -1206,8 +1206,6 @@ class DatabaseOperations:
 
         total_posts = (
             session.query(func.count(SentimentAnalysis.id))
-            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
-            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
             .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
             .scalar()
             or 0
@@ -1215,8 +1213,6 @@ class DatabaseOperations:
 
         avg_platform_sentiment = (
             session.query(func.avg(SentimentAnalysis.positive_score))
-            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
-            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
             .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
             .scalar()
             or 0.0
