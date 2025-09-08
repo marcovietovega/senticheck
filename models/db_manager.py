@@ -1,41 +1,23 @@
 #!/usr/bin/env python3
-"""
-Database manager for SentiCheck with sentiment analysis support.
-
-This module provides a high-level interface for managing the complete
-sentiment analysis pipeline including data storage and retrieval.
-"""
 
 import logging
-import sys
-import os
+from collections import defaultdict
 from typing import List, Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from sqlalchemy import func
 
 
-if __name__ == "__main__":
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from .db_operations import get_db_operations
+from .database import RawPost, CleanedPost, SentimentAnalysis
 
-try:
-    from .db_operations import get_db_operations
-    from .database import RawPost, CleanedPost
-except ImportError:
-    from db_operations import get_db_operations
-    from database import RawPost, CleanedPost, SentimentAnalysis
 
 logger = logging.getLogger(__name__)
 
 
 class SentiCheckDBManager:
-    """
-    High-level database manager for SentiCheck sentiment analysis pipeline.
-
-    This class provides convenient methods for managing the complete workflow
-    from raw posts to sentiment analysis results.
-    """
+    """Database manager for SentiCheck sentiment analysis pipeline."""
 
     def __init__(self):
-        """Initialize the database manager."""
         self.db_ops = get_db_operations()
 
     def test_connection(self) -> bool:
@@ -47,17 +29,34 @@ class SentiCheckDBManager:
         self.db_ops.db_connection.create_tables()
 
     def get_database_stats(self) -> Dict[str, Any]:
-        """Get comprehensive database statistics."""
+        """Get database statistics.
+
+        Returns:
+            Dictionary containing database statistics
+        """
         return self.db_ops.get_database_stats()
 
-    def store_raw_posts(
-        self, posts_data: List[Dict], search_keyword: str = None
-    ) -> int:
-        """Store raw posts from social media platforms."""
-        return self.db_ops.store_raw_posts(posts_data, search_keyword)
+    def store_raw_posts(self, posts_data: List[Dict]) -> int:
+        """Store raw posts from social media platforms.
+
+        Args:
+            posts_data: List of raw post data (each post should have search_keyword)
+
+        Returns:
+            Number of stored raw posts
+        """
+        return self.db_ops.store_raw_posts(posts_data)
 
     def get_unprocessed_posts(self, limit: Optional[int] = 100) -> List[RawPost]:
-        """Get raw posts that haven't been cleaned yet."""
+        """
+        Get raw posts that haven't been cleaned yet.
+
+        Args:
+            limit: Maximum number of posts to retrieve
+
+        Returns:
+            List of unprocessed raw posts
+        """
         return self.db_ops.get_unprocessed_posts(limit)
 
     def store_cleaned_post(
@@ -69,7 +68,20 @@ class SentiCheckDBManager:
         preserve_hashtags: bool = False,
         preserve_mentions: bool = False,
     ) -> Optional[int]:
-        """Store cleaned post data."""
+        """
+        Store cleaned post data.
+
+        Args:
+            raw_post_id: ID of the raw post
+            cleaned_text: Cleaned text of the post
+            original_text: Original text of the post
+            cleaning_metadata: Metadata related to the cleaning process
+            preserve_hashtags: Whether to preserve hashtags
+            preserve_mentions: Whether to preserve mentions
+
+        Returns:
+            ID of the stored cleaned post, or None if failed
+        """
         return self.db_ops.store_cleaned_post(
             raw_post_id=raw_post_id,
             cleaned_text=cleaned_text,
@@ -80,7 +92,15 @@ class SentiCheckDBManager:
         )
 
     def get_unanalyzed_posts(self, limit: Optional[int] = 100) -> List[CleanedPost]:
-        """Get cleaned posts that haven't been analyzed for sentiment yet."""
+        """
+        Get cleaned posts that haven't been analyzed for sentiment yet.
+
+        Args:
+            limit: Maximum number of posts to retrieve
+
+        Returns:
+            List of unanalyzed cleaned posts
+        """
         return self.db_ops.get_unanalyzed_posts(limit)
 
     def store_sentiment_analysis(
@@ -94,7 +114,22 @@ class SentiCheckDBManager:
         model_name: str = "unknown",
         model_version: str = None,
     ) -> Optional[int]:
-        """Store sentiment analysis results for a single post."""
+        """
+        Store sentiment analysis results for a single post.
+
+        Args:
+            cleaned_post_id: ID of the cleaned post
+            sentiment_label: Predicted sentiment label
+            confidence_score: Confidence score of the prediction
+            positive_score: Positive sentiment score (optional)
+            negative_score: Negative sentiment score (optional)
+            neutral_score: Neutral sentiment score (optional)
+            model_name: Name of the model used for prediction
+            model_version: Version of the model used for prediction
+
+        Returns:
+            ID of the stored sentiment analysis result, or None if failed
+        """
         return self.db_ops.store_sentiment_analysis(
             cleaned_post_id=cleaned_post_id,
             sentiment_label=sentiment_label,
@@ -107,7 +142,15 @@ class SentiCheckDBManager:
         )
 
     def store_sentiment_analysis_batch(self, sentiment_results: List[Dict]) -> int:
-        """Store multiple sentiment analysis results."""
+        """
+        Store multiple sentiment analysis results.
+
+        Args:
+            sentiment_results: List of sentiment analysis results to store
+
+        Returns:
+            Number of successfully stored results
+        """
         return self.db_ops.store_sentiment_analysis_batch(sentiment_results)
 
     def process_raw_posts_to_cleaned(
@@ -146,7 +189,7 @@ class SentiCheckDBManager:
             for raw_post in raw_posts:
                 try:
                     post_data = {
-                        "id": raw_post.id,  # Add post ID for logging
+                        "id": raw_post.id,
                         "text": raw_post.text,
                         "author": raw_post.author,
                         "created_at": (
@@ -164,10 +207,9 @@ class SentiCheckDBManager:
                         min_content_words=min_content_words,
                     )
 
-                    # Check if post was filtered out (returns None)
                     if cleaned_post is None:
                         filtered_count += 1
-                        # Still mark the raw post as processed even if filtered
+
                         with self.db_ops.db_connection.get_session() as session:
                             raw_post_obj = (
                                 session.query(RawPost).filter_by(id=raw_post.id).first()
@@ -177,14 +219,13 @@ class SentiCheckDBManager:
                         continue
 
                     if cleaned_post.get("text", "").strip():
-                        # Add filtering metadata
+
                         cleaning_metadata = {
                             "cleaned_at": datetime.now().isoformat(),
                             "filter_hashtag_only": filter_hashtag_only,
                             "min_content_words": min_content_words,
                         }
 
-                        # Include content analysis if available
                         if "content_analysis" in cleaned_post:
                             cleaning_metadata["content_analysis"] = cleaned_post[
                                 "content_analysis"
@@ -307,67 +348,421 @@ class SentiCheckDBManager:
             logger.error(f"Failed to analyze sentiment: {e}")
             return 0
 
-    def run_full_pipeline(
-        self,
-        posts_data: List[Dict],
-        search_keyword: str = None,
-        preserve_hashtags: bool = False,
-        preserve_mentions: bool = False,
-        filter_hashtag_only: bool = True,
-        min_content_words: int = 3,
-        model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest",
-    ) -> Dict[str, int]:
+    def get_sentiment_distribution(self) -> Dict[str, int]:
         """
-        Run the complete pipeline from raw posts to sentiment analysis.
-
-        Args:
-            posts_data: List of raw post dictionaries
-            search_keyword: Keyword used to search for posts
-            preserve_hashtags: Whether to keep hashtags during cleaning
-            preserve_mentions: Whether to keep mentions during cleaning
-            filter_hashtag_only: Whether to filter posts that are mostly hashtags
-            min_content_words: Minimum number of content words required
-            model_name: Sentiment analysis model name
+        Get sentiment distribution counts from database.
 
         Returns:
-            Dict[str, int]: Results summary with counts
+            Dict[str, int]: A dictionary with sentiment labels as keys and their counts as values.
         """
-        results = {
-            "raw_posts_stored": 0,
-            "posts_cleaned": 0,
-            "posts_analyzed": 0,
-            "errors": 0,
-        }
-
         try:
-            logger.info("Starting full sentiment analysis pipeline...")
+            raw_results = self.db_ops.get_sentiment_distribution()
 
-            logger.info("Step 1: Storing raw posts...")
-            results["raw_posts_stored"] = self.store_raw_posts(
-                posts_data, search_keyword
-            )
+            distribution = {"positive": 0, "negative": 0, "neutral": 0}
+            for sentiment_label, count in raw_results:
+                if sentiment_label in distribution:
+                    distribution[sentiment_label] = count
 
-            logger.info("Step 2: Cleaning posts...")
-            results["posts_cleaned"] = self.process_raw_posts_to_cleaned(
-                preserve_hashtags=preserve_hashtags,
-                preserve_mentions=preserve_mentions,
-                filter_hashtag_only=filter_hashtag_only,
-                min_content_words=min_content_words,
-                limit=len(posts_data),
-            )
+            return distribution
+        except Exception as e:
+            logger.error(f"Error getting sentiment distribution: {e}")
+            return {"positive": 0, "negative": 0, "neutral": 0}
 
-            logger.info("Step 3: Analyzing sentiment...")
-            results["posts_analyzed"] = self.analyze_cleaned_posts_sentiment(
-                model_name=model_name, limit=results["posts_cleaned"]
-            )
+    def get_sentiment_distribution_filtered(self, selected_keywords: Optional[List[str]] = None) -> Dict[str, int]:
+        """
+        Get sentiment distribution counts from database, optionally filtered by keywords.
 
-            logger.info("Full pipeline completed successfully")
-            return results
+        Args:
+            selected_keywords: Optional list of keywords to filter by. None for all keywords.
+
+        Returns:
+            Dict[str, int]: A dictionary with sentiment labels as keys and their counts as values.
+        """
+        try:
+            with self.db_ops.db_connection.get_session() as session:
+                base_query = session.query(
+                    SentimentAnalysis.sentiment_label,
+                    func.count(SentimentAnalysis.id).label("count"),
+                )
+
+                if selected_keywords is not None and selected_keywords:
+                    base_query = base_query.filter(SentimentAnalysis.search_keyword.in_(selected_keywords))
+
+                results = base_query.group_by(SentimentAnalysis.sentiment_label).all()
+
+                distribution = {"positive": 0, "negative": 0, "neutral": 0}
+                for result in results:
+                    sentiment = result.sentiment_label.lower()
+                    if sentiment in distribution:
+                        distribution[sentiment] = result.count
+
+                return distribution
 
         except Exception as e:
-            logger.error(f"Full pipeline failed: {e}")
-            results["errors"] = 1
-            return results
+            logger.error(f"Error getting filtered sentiment distribution: {e}")
+            return {"positive": 0, "negative": 0, "neutral": 0}
+
+    def get_sentiment_over_time(self, days: int = 7) -> List[Dict[str, Any]]:
+        """
+        Get sentiment counts by date for time series analysis.
+
+        Args:
+            days: Number of days of historical data to return
+
+        Returns:
+            List of dicts with date and sentiment counts
+        """
+        try:
+            with self.db_ops.db_connection.get_session() as session:
+                end_date = datetime.now().date()
+                start_date = end_date - timedelta(days=days - 1)
+
+                all_records = (
+                    session.query(
+                        func.date(SentimentAnalysis.analyzed_at).label("date"),
+                        SentimentAnalysis.sentiment_label,
+                    )
+                    .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
+                    .filter(func.date(SentimentAnalysis.analyzed_at) <= end_date)
+                    .all()
+                )
+
+                date_sentiment_counts = defaultdict(
+                    lambda: {"positive": 0, "negative": 0, "neutral": 0}
+                )
+
+                for record in all_records:
+                    date_sentiment_counts[record.date][record.sentiment_label] += 1
+
+                results = []
+                for date, counts in date_sentiment_counts.items():
+                    results.append(
+                        type(
+                            "Result",
+                            (),
+                            {
+                                "date": date,
+                                "positive": counts["positive"],
+                                "negative": counts["negative"],
+                                "neutral": counts["neutral"],
+                            },
+                        )
+                    )
+
+                    results.sort(key=lambda x: x.date)
+
+                data = []
+                for result in results:
+                    data.append(
+                        {
+                            "date": result.date,
+                            "positive": result.positive,
+                            "negative": result.negative,
+                            "neutral": result.neutral,
+                        }
+                    )
+
+                return data
+
+        except Exception as e:
+            logger.error(f"Error getting sentiment over time: {e}")
+            return []
+
+    def get_sentiment_over_time_filtered(self, days: int = 7, selected_keywords: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """
+        Get sentiment counts by date for time series analysis, optionally filtered by keywords.
+
+        Args:
+            days: Number of days of historical data to return
+            selected_keywords: Optional list of keywords to filter by. None for all keywords.
+
+        Returns:
+            List of dicts with date and sentiment counts
+        """
+        try:
+            with self.db_ops.db_connection.get_session() as session:
+                end_date = datetime.now().date()
+                start_date = end_date - timedelta(days=days - 1)
+
+                base_query = (
+                    session.query(
+                        func.date(SentimentAnalysis.analyzed_at).label("date"),
+                        SentimentAnalysis.sentiment_label,
+                        func.count(SentimentAnalysis.id).label("count"),
+                    )
+                    .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
+                    .filter(func.date(SentimentAnalysis.analyzed_at) <= end_date)
+                )
+
+                if selected_keywords is not None and selected_keywords:
+                    base_query = base_query.filter(SentimentAnalysis.search_keyword.in_(selected_keywords))
+
+                results = base_query.group_by(
+                    func.date(SentimentAnalysis.analyzed_at),
+                    SentimentAnalysis.sentiment_label
+                ).all()
+
+                data_dict = {}
+                for result in results:
+                    date_str = result.date.strftime("%Y-%m-%d")
+                    if date_str not in data_dict:
+                        data_dict[date_str] = {"date": date_str, "positive": 0, "negative": 0, "neutral": 0}
+                    
+                    sentiment = result.sentiment_label.lower()
+                    if sentiment in ["positive", "negative", "neutral"]:
+                        data_dict[date_str][sentiment] = result.count
+
+                    data = list(data_dict.values())
+                data.sort(key=lambda x: x["date"])
+
+                return data
+
+        except Exception as e:
+            logger.error(f"Error getting filtered sentiment over time: {e}")
+            return []
+
+    def calculate_sentiment_trends(
+        self, selected_keywords: Optional[List[str]] = None
+    ) -> Dict[str, float]:
+        """
+        Calculate sentiment trends compared to previous day, optionally filtered by keywords.
+
+        Args:
+            selected_keywords: Optional list of keywords to filter by. None for all keywords.
+
+        Returns:
+            Dict with trend percentages for each sentiment
+        """
+        try:
+            today = datetime.now(timezone.utc).date()
+            yesterday = today - timedelta(days=1)
+
+            with self.db_ops.db_connection.get_session() as session:
+                today_query = (
+                    session.query(
+                        SentimentAnalysis.sentiment_label,
+                        func.count(SentimentAnalysis.id).label("count"),
+                    )
+                    .filter(func.date(SentimentAnalysis.analyzed_at) == today)
+                )
+
+                yesterday_query = (
+                    session.query(
+                        SentimentAnalysis.sentiment_label,
+                        func.count(SentimentAnalysis.id).label("count"),
+                    )
+                    .filter(func.date(SentimentAnalysis.analyzed_at) == yesterday)
+                )
+
+                if selected_keywords is not None and selected_keywords:
+                    today_query = today_query.filter(
+                        SentimentAnalysis.search_keyword.in_(selected_keywords)
+                    )
+                    yesterday_query = yesterday_query.filter(
+                        SentimentAnalysis.search_keyword.in_(selected_keywords)
+                    )
+
+                today_result = today_query.group_by(
+                    SentimentAnalysis.sentiment_label
+                ).all()
+                yesterday_result = yesterday_query.group_by(
+                    SentimentAnalysis.sentiment_label
+                ).all()
+
+                today_counts = {sentiment: count for sentiment, count in today_result}
+                yesterday_counts = {
+                    sentiment: count for sentiment, count in yesterday_result
+                }
+
+                trends = {}
+                for sentiment in ["positive", "negative", "neutral"]:
+                    today_count = today_counts.get(sentiment, 0)
+                    yesterday_count = yesterday_counts.get(sentiment, 0)
+
+                    if yesterday_count > 0:
+                        trend = (
+                            (today_count - yesterday_count) / yesterday_count
+                        ) * 100
+                        trends[f"{sentiment}_trend"] = round(trend, 1)
+                    else:
+                        trends[f"{sentiment}_trend"] = 0.0
+
+                return trends
+
+        except Exception as e:
+            logger.error(f"Error calculating sentiment trends: {e}")
+            return {"positive_trend": 0.0, "negative_trend": 0.0, "neutral_trend": 0.0}
+
+    def get_recent_posts_with_analysis(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get recent posts with their sentiment analysis results.
+
+        Args:
+            limit: Maximum number of posts to return
+
+        Returns:
+            List of post dictionaries with sentiment data
+        """
+        try:
+
+            with self.db_ops.db_connection.get_session() as session:
+                result = (
+                    session.query(RawPost, CleanedPost, SentimentAnalysis)
+                    .join(CleanedPost, RawPost.id == CleanedPost.raw_post_id)
+                    .join(
+                        SentimentAnalysis,
+                        CleanedPost.id == SentimentAnalysis.cleaned_post_id,
+                    )
+                    .order_by(RawPost.created_at.desc())
+                    .limit(limit)
+                    .all()
+                )
+
+                posts = []
+                for raw_post, cleaned_post, sentiment in result:
+                    posts.append(
+                        {
+                            "id": raw_post.id,
+                            "text": raw_post.text,
+                            "author": raw_post.author,
+                            "created_at": raw_post.created_at,
+                            "sentiment": sentiment.sentiment_label,
+                            "confidence": sentiment.confidence_score,
+                            "cleaned_text": cleaned_post.cleaned_text,
+                        }
+                    )
+
+                return posts
+
+        except Exception as e:
+            logger.error(f"Error getting recent posts: {e}")
+            return []
+
+    def get_average_confidence(self) -> float:
+        """
+        Get average confidence score across all analyzed posts.
+
+        Returns:
+            float: Average confidence score
+        """
+        try:
+            return self.db_ops.get_average_confidence()
+        except Exception as e:
+            logger.error(f"Error getting average confidence: {e}")
+            return 0.0
+
+    def get_today_posts_count(self) -> int:
+        """
+        Get count of posts created today.
+
+        Returns:
+            int: Count of today's posts
+        """
+        try:
+            return self.db_ops.get_today_posts_count()
+        except Exception as e:
+            logger.error(f"Error getting today's post count: {e}")
+            return 0
+
+    def get_posts_by_date(self, days: int = 7) -> Dict[str, int]:
+        """
+        Get post counts by date for the last N days.
+
+        Args:
+            days: Number of days to look back
+
+        Returns:
+            Dictionary with dates as keys and post counts as values
+        """
+        try:
+            raw_results = self.db_ops.get_posts_by_date_range(days)
+
+            end_date = datetime.now(timezone.utc).date()
+            start_date = end_date - timedelta(days=days)
+            date_counts = {}
+            current_date = start_date
+            while current_date <= end_date:
+                date_counts[current_date.strftime("%Y-%m-%d")] = 0
+                current_date += timedelta(days=1)
+
+            for date_str, count in raw_results:
+                if date_str in date_counts:
+                    date_counts[date_str] = count
+
+            return date_counts
+        except Exception as e:
+            logger.error(f"Error getting posts by date: {e}")
+            return {}
+
+    def get_keywords_with_counts(self) -> List[tuple]:
+        """
+        Get all available keywords with their post counts.
+
+        Returns:
+            List of tuples (keyword, count)
+        """
+        try:
+            return self.db_ops.get_keywords_with_counts()
+        except Exception as e:
+            logger.error(f"Error getting keywords with counts: {e}")
+            return []
+
+    def get_keyword_specific_metrics(self, keyword: str) -> Dict[str, Any]:
+        """
+        Get sentiment metrics for a specific keyword.
+
+        Args:
+            keyword: The keyword to analyze
+
+        Returns:
+            Dictionary with keyword-specific metrics
+        """
+        try:
+            return self.db_ops.get_keyword_specific_metrics(keyword)
+        except Exception as e:
+            logger.error(f"Error getting keyword metrics for {keyword}: {e}")
+            return {}
+
+    def get_unified_kpi_metrics(
+        self, selected_keywords: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        try:
+            return self.db_ops.get_unified_kpi_metrics(selected_keywords)
+        except Exception as e:
+            logger.error(f"Error getting unified KPI metrics: {e}")
+            return {
+                "total_posts": 0,
+                "positive_percentage": 0.0,
+                "negative_percentage": 0.0,
+                "neutral_percentage": 0.0,
+                "avg_confidence": 0.0,
+                "posts_today": 0,
+            }
+
+    def get_keyword_specific_kpis(self, selected_keyword: str) -> Dict[str, Any]:
+        """
+        Get enhanced KPI metrics for a specific keyword.
+
+        Args:
+            selected_keyword: Single keyword to analyze
+
+        Returns:
+            Dictionary with keyword-specific KPI metrics
+        """
+        return self.db_ops.get_keyword_specific_kpis(selected_keyword)
+
+    def get_keyword_insights(self, selected_keywords: Optional[List[str]], days: int = 7) -> Dict[str, Any]:
+        """
+        Get keyword insights by delegating to DatabaseOperations.
+        
+        Args:
+            selected_keywords: List of keywords to analyze, None for all
+            days: Number of days to analyze (7, 15, or 30)
+            
+        Returns:
+            Dictionary with insights data
+        """
+        return self.db_ops.get_keyword_insights(selected_keywords, days)
 
 
 db_manager = None
@@ -379,142 +774,3 @@ def get_db_manager() -> SentiCheckDBManager:
     if db_manager is None:
         db_manager = SentiCheckDBManager()
     return db_manager
-
-
-def main():
-    """
-    Main function for testing and managing the SentiCheck database.
-    Provides an interactive interface for various database operations.
-    """
-    print("=" * 60)
-    print("SENTICHECK DATABASE MANAGER")
-    print("=" * 60)
-
-    try:
-        # Initialize manager
-        manager = get_db_manager()
-
-        # Test connection
-        print("\n1. Testing database connection...")
-        if not manager.test_connection():
-            print("❌ Database connection failed!")
-            print("Please check your .env file and database configuration.")
-            return
-        print("✅ Database connection successful")
-
-        # Show current stats
-        print("\n2. Current database statistics:")
-        stats = manager.get_database_stats()
-        for key, value in stats.items():
-            print(f"   {key.replace('_', ' ').title()}: {value}")
-
-        # Interactive menu
-        while True:
-            print("\n" + "=" * 60)
-            print("DATABASE OPERATIONS MENU")
-            print("=" * 60)
-            print("1. Show database statistics")
-            print("2. Process raw posts to cleaned")
-            print("3. Analyze sentiment for cleaned posts")
-            print("4. Run full pipeline test")
-            print("5. Create/recreate database tables")
-            print("6. Show unprocessed posts count")
-            print("7. Show unanalyzed posts count")
-            print("8. Exit")
-
-            choice = input("\nEnter your choice (1-8): ").strip()
-
-            if choice == "1":
-                print("\nDatabase Statistics:")
-                stats = manager.get_database_stats()
-                for key, value in stats.items():
-                    print(f"  {key.replace('_', ' ').title()}: {value}")
-
-            elif choice == "2":
-                limit = int(input("Enter max posts to process (default 10): ") or "10")
-                print(f"\nProcessing up to {limit} raw posts...")
-                processed = manager.process_raw_posts_to_cleaned(limit=limit)
-                print(f"✅ Processed {processed} posts to cleaned format")
-
-            elif choice == "3":
-                limit = int(input("Enter max posts to analyze (default 10): ") or "10")
-                model = input(
-                    "Model name (default: cardiffnlp/twitter-roberta-base-sentiment-latest): "
-                ).strip()
-                if not model:
-                    model = "cardiffnlp/twitter-roberta-base-sentiment-latest"
-                print(f"\nAnalyzing sentiment for up to {limit} posts...")
-                analyzed = manager.analyze_cleaned_posts_sentiment(
-                    model_name=model, limit=limit
-                )
-                print(f"✅ Analyzed sentiment for {analyzed} posts")
-
-            elif choice == "4":
-                print("\nRunning full pipeline test...")
-                try:
-                    from connectors.bluesky.fetch_posts import fetch_bluesky_posts
-
-                    keyword = input("Search keyword (default: AI): ").strip() or "AI"
-                    limit = int(input("Number of posts to fetch (default: 3): ") or "3")
-
-                    print(f"Fetching {limit} posts for '{keyword}'...")
-                    posts = fetch_bluesky_posts(keyword, limit)
-
-                    if posts:
-                        results = manager.run_full_pipeline(
-                            posts, search_keyword=keyword
-                        )
-                        print(f"Pipeline Results:")
-                        for key, value in results.items():
-                            print(f"  {key.replace('_', ' ').title()}: {value}")
-                    else:
-                        print("❌ No posts fetched")
-
-                except ImportError:
-                    print("❌ Bluesky connector not available")
-                except Exception as e:
-                    print(f"❌ Pipeline test failed: {e}")
-
-            elif choice == "5":
-                confirm = input("This will recreate all tables. Are you sure? (y/N): ")
-                if confirm.lower() == "y":
-                    print("Creating/recreating database tables...")
-                    manager.create_tables()
-                    print("✅ Database tables created successfully")
-                else:
-                    print("Operation cancelled")
-
-            elif choice == "6":
-                unprocessed = manager.get_unprocessed_posts(limit=1000)
-                print(f"Unprocessed posts: {len(unprocessed)}")
-                if unprocessed:
-                    show_details = input("Show first 5 posts? (y/N): ")
-                    if show_details.lower() == "y":
-                        for i, post in enumerate(unprocessed[:5], 1):
-                            print(f"  [{i}] {post.author}: {post.text[:100]}...")
-
-            elif choice == "7":
-                unanalyzed = manager.get_unanalyzed_posts(limit=1000)
-                print(f"Unanalyzed posts: {len(unanalyzed)}")
-                if unanalyzed:
-                    show_details = input("Show first 5 posts? (y/N): ")
-                    if show_details.lower() == "y":
-                        for i, post in enumerate(unanalyzed[:5], 1):
-                            print(f"  [{i}] {post.cleaned_text[:100]}...")
-
-            elif choice == "8":
-                print("Goodbye!")
-                break
-
-            else:
-                print("Invalid choice. Please enter 1-8.")
-
-    except KeyboardInterrupt:
-        print("\nOperation cancelled by user.")
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        logger.error(f"Main function error: {e}")
-
-
-if __name__ == "__main__":
-    main()

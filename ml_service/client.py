@@ -1,21 +1,18 @@
 """
 HTTP Client for SentiCheck Sentiment Analysis Service
 
-This client allows Airflow and other components to communicate with the FastAPI sentiment analysis service.
-It provides a clean interface for making HTTP requests to analyze sentiment without dealing with raw HTTP calls.
+Client for communicating with the FastAPI sentiment analysis service.
+Provides a clean interface for HTTP requests to analyze sentiment.
 """
 
 import httpx
 import logging
 import time
-from typing import List, Dict, Any, Optional, Union
-from datetime import datetime
+from typing import List, Dict, Any, Optional
 
-# Import configuration
 try:
     from .config import config
 except ImportError:
-    # For standalone usage
     import sys
     import os
 
@@ -26,16 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 class SentimentAnalysisClient:
-    """
-    Client for communicating with the SentiCheck Sentiment Analysis API.
+    """Client for communicating with the SentiCheck Sentiment Analysis API.
 
-    This client provides methods to:
-    1. Check service health
-    2. Analyze single texts
-    3. Analyze batches of texts
-    4. Get model information
-
-    It handles HTTP errors, retries, and provides a clean interface for Airflow tasks.
+    Provides methods to check service health, analyze texts, and get model information.
+    Handles HTTP errors, retries, and provides a clean interface for Airflow tasks.
     """
 
     def __init__(
@@ -356,32 +347,3 @@ def create_sentiment_client(
     return SentimentAnalysisClient(base_url=service_url, timeout=timeout)
 
 
-# Example usage for testing
-if __name__ == "__main__":
-    # Set up logging for testing
-    logging.basicConfig(level=logging.INFO)
-
-    # Test the client
-    with create_sentiment_client() as client:
-        try:
-            # Test health check
-            health = client.check_health()
-            print(f"Service Health: {health['status']}")
-
-            # Test single text analysis
-            result = client.analyze_single_text("I love this new AI technology!")
-            print(
-                f"Single Analysis: {result['sentiment_label']} ({result['confidence_score']:.3f})"
-            )
-
-            # Test batch analysis
-            texts = [
-                {"text": "This is amazing!", "id": "1"},
-                {"text": "I don't like this.", "id": "2"},
-                {"text": "It's okay, nothing special.", "id": "3"},
-            ]
-            batch_result = client.analyze_batch_texts(texts)
-            print(f"Batch Analysis: {batch_result['total_processed']} texts processed")
-
-        except Exception as e:
-            print(f"Test failed: {e}")

@@ -5,7 +5,6 @@ from datetime import datetime
 from dotenv import load_dotenv
 from atproto import Client
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
@@ -18,7 +17,6 @@ class BlueskyConnector:
     """Connector for fetching posts from Bluesky using AT Protocol."""
 
     def __init__(self):
-        """Initialize the Bluesky connector with environment variables."""
         self.handle = os.getenv("BLUESKY_HANDLE")
         self.app_password = os.getenv("BLUESKY_APP_PASSWORD")
         self.client = None

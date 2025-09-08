@@ -14,11 +14,10 @@ class SentimentAnalyzer:
     def __init__(
         self, model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest"
     ):
-        """
-        Initialize the sentiment analyzer.
+        """Initialize the sentiment analyzer.
 
         Args:
-            model_name (str): Hugging Face model name for sentiment analysis
+            model_name: Hugging Face model name for sentiment analysis
         """
 
         self.model_name = model_name
@@ -28,11 +27,10 @@ class SentimentAnalyzer:
         self.is_initialized = False
 
     def initialize(self) -> bool:
-        """
-        Initialize the sentiment analysis model.
+        """Initialize the sentiment analysis model.
 
         Returns:
-            bool: True if initialization successful, False otherwise
+            True if initialization successful, False otherwise
         """
         try:
             logger.info(f"Initializing sentiment analysis model: {self.model_name}")
@@ -59,14 +57,13 @@ class SentimentAnalyzer:
             return False
 
     def analyze_text(self, text: str) -> Optional[Dict]:
-        """
-        Analyze sentiment of a single text.
+        """Analyze sentiment of a single text.
 
         Args:
-            text (str): Text to analyze
+            text: Text to analyze
 
         Returns:
-            Dict: Sentiment analysis result or None if failed
+            Sentiment analysis result or None if failed
         """
         if not text or not text.strip():
             logger.warning("Empty text provided for sentiment analysis")
@@ -77,7 +74,7 @@ class SentimentAnalyzer:
             max_length = getattr(self.tokenizer, "model_max_length", 500)
 
             if len(tokens) > max_length:
-                truncated_tokens = tokens[: max_length - 1]  # -1 for end token
+                truncated_tokens = tokens[: max_length - 1]
                 text = self.tokenizer.decode(truncated_tokens, skip_special_tokens=True)
                 logger.debug(
                     f"Text truncated from {len(tokens)} to {len(truncated_tokens)} tokens"
@@ -112,14 +109,13 @@ class SentimentAnalyzer:
             return None
 
     def _standardize_label(self, label: str) -> str:
-        """
-        Standardize sentiment labels across different models.
+        """Standardize sentiment labels across different models.
 
         Args:
-            label (str): Original label from model
+            label: Original label from model
 
         Returns:
-            str: Standardized label ('positive', 'negative', 'neutral')
+            Standardized label ('positive', 'negative', 'neutral')
         """
         label_lower = label.lower()
 
@@ -134,14 +130,13 @@ class SentimentAnalyzer:
             return label_lower
 
     def analyze_posts_batch(self, posts: List[Dict]) -> List[Dict]:
-        """
-        Analyze sentiment for a batch of posts.
+        """Analyze sentiment for a batch of posts.
 
         Args:
-            posts (List[Dict]): List of post dictionaries with 'text' field
+            posts: List of post dictionaries with 'text' field
 
         Returns:
-            List[Dict]: List of posts with sentiment analysis results
+            List of posts with sentiment analysis results
         """
 
         if not posts:
@@ -185,11 +180,10 @@ class SentimentAnalyzer:
         return analyzed_posts
 
     def get_model_info(self) -> Dict:
-        """
-        Get information about the loaded model.
+        """Get information about the loaded model.
 
         Returns:
-            Dict: Model information
+            Model information
         """
         if not self.is_initialized:
             return {"error": "Model not initialized"}
@@ -211,15 +205,14 @@ def analyze_sentiment_batch(
     posts: List[Dict],
     model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest",
 ) -> List[Dict]:
-    """
-    Function to analyze sentiment for a batch of posts.
+    """Analyze sentiment for a batch of posts.
 
     Args:
-        posts (List[Dict]): List of post dictionaries
-        model_name (str): Hugging Face model name
+        posts: List of post dictionaries
+        model_name: Hugging Face model name
 
     Returns:
-        List[Dict]: List of posts with sentiment analysis results
+        List of posts with sentiment analysis results
     """
     analyzer = SentimentAnalyzer(model_name)
 
@@ -234,38 +227,3 @@ def analyze_sentiment_batch(
         return []
 
 
-if __name__ == "__main__":
-    import sys
-    import os
-
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-    from connectors.bluesky.fetch_posts import fetch_bluesky_posts
-    from scripts.text_cleaner import clean_bluesky_posts
-
-    print("Fetching sample posts...")
-    posts = fetch_bluesky_posts("AI", 3)
-
-    if posts:
-        print("\nCleaning posts...")
-        cleaned_posts = clean_bluesky_posts(posts)
-
-        print("\nAnalyzing sentiment...")
-        analyzed_posts = analyze_sentiment_batch(cleaned_posts)
-
-        print(f"\nSENTIMENT ANALYSIS RESULTS:")
-        print("=" * 60)
-
-        for i, post in enumerate(analyzed_posts, 1):
-            sentiment = post.get("sentiment_analysis", {})
-            print(f"\n[{i}] Text: {post.get('text', '')[:100]}...")
-            print(f"    Sentiment: {sentiment.get('sentiment_label', 'N/A')}")
-            print(f"    Confidence: {sentiment.get('confidence_score', 'N/A'):.3f}")
-
-            for label in ["positive", "negative", "neutral"]:
-                score_key = f"{label}_score"
-                if score_key in sentiment:
-                    print(f"    {label.title()}: {sentiment[score_key]:.3f}")
-
-    else:
-        print("No posts found to analyze.")

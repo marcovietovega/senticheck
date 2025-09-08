@@ -1,7 +1,7 @@
 """
 Configuration settings for the SentiCheck ML Service
 
-This file contains configuration constants and environment variable handling
+Contains configuration constants and environment variable handling
 for both the FastAPI service and the client.
 """
 
@@ -9,10 +9,8 @@ import os
 from typing import Optional
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
-# Fallback constants (only used if .env values are not set)
 FALLBACK_SERVICE_HOST = "localhost"
 FALLBACK_SERVICE_PORT = 8000
 FALLBACK_MODEL_NAME = "cardiffnlp/twitter-roberta-base-sentiment-latest"
