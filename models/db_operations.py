@@ -935,10 +935,7 @@ class DatabaseOperations:
                 func.date(SentimentAnalysis.analyzed_at) >= thirty_days_ago,
             )
             .group_by(func.date(SentimentAnalysis.analyzed_at))
-            .having(
-                func.count(SentimentAnalysis.id)
-                >= 5
-            )
+            .having(func.count(SentimentAnalysis.id) >= 5)
             .order_by(
                 func.avg(
                     case(
@@ -958,6 +955,352 @@ class DatabaseOperations:
             }
         else:
             return {"peak_sentiment": 0.0, "peak_date": None}
+
+    def get_keyword_insights(
+        self, selected_keywords: Optional[List[str]], days: int = 7
+    ) -> Dict[str, Any]:
+        """
+        Get comprehensive insights for selected keywords.
+
+        Args:
+            selected_keywords: List of keywords to analyze, None for all
+            days: Number of days to analyze (7, 15, or 30)
+
+        Returns:
+            Dictionary with insights data organized by category
+        """
+        try:
+            with self.db_connection.get_session() as session:
+                if not selected_keywords:
+                    return self._get_platform_insights(session, days)
+                elif len(selected_keywords) == 1:
+                    return self._get_single_keyword_insights(
+                        session, selected_keywords[0], days
+                    )
+                else:
+                    return self._get_multi_keyword_insights(
+                        session, selected_keywords, days
+                    )
+
+        except Exception as e:
+            logger.error(f"Error getting keyword insights: {e}")
+            return {
+                "trend_analysis": {},
+                "volume_stats": {},
+                "performance_metrics": {},
+                "activity_patterns": {},
+            }
+
+    def _get_single_keyword_insights(
+        self, session, keyword: str, days: int
+    ) -> Dict[str, Any]:
+        """Get insights for a single keyword."""
+        from datetime import timedelta
+
+        end_date = datetime.now(timezone.utc).date()
+        start_date = end_date - timedelta(days=days)
+        previous_start = start_date - timedelta(days=days)
+
+        current_sentiment = (
+            session.query(func.avg(SentimentAnalysis.positive_score))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= start_date,
+            )
+            .scalar()
+            or 0.0
+        )
+
+        previous_sentiment = (
+            session.query(func.avg(SentimentAnalysis.positive_score))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= previous_start,
+                func.date(SentimentAnalysis.analyzed_at) < start_date,
+            )
+            .scalar()
+            or 0.0
+        )
+
+        sentiment_change = 0.0
+        if previous_sentiment > 0:
+            sentiment_change = (
+                (current_sentiment - previous_sentiment) / previous_sentiment
+            ) * 100
+
+        best_day_data = (
+            session.query(
+                func.date(SentimentAnalysis.analyzed_at),
+                func.avg(SentimentAnalysis.positive_score),
+            )
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= start_date,
+            )
+            .group_by(func.date(SentimentAnalysis.analyzed_at))
+            .order_by(func.avg(SentimentAnalysis.positive_score).desc())
+            .first()
+        )
+
+        worst_day_data = (
+            session.query(
+                func.date(SentimentAnalysis.analyzed_at),
+                func.avg(SentimentAnalysis.positive_score),
+            )
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= start_date,
+            )
+            .group_by(func.date(SentimentAnalysis.analyzed_at))
+            .order_by(func.avg(SentimentAnalysis.positive_score).asc())
+            .first()
+        )
+
+        current_posts = (
+            session.query(func.count(SentimentAnalysis.id))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= start_date,
+            )
+            .scalar()
+            or 0
+        )
+
+        all_keywords_volume = (
+            session.query(
+                RawPost.search_keyword,
+                func.count(SentimentAnalysis.id).label("post_count"),
+            )
+            .join(CleanedPost, RawPost.id == CleanedPost.raw_post_id)
+            .join(
+                SentimentAnalysis, CleanedPost.id == SentimentAnalysis.cleaned_post_id
+            )
+            .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
+            .group_by(RawPost.search_keyword)
+            .order_by(func.count(SentimentAnalysis.id).desc())
+            .all()
+        )
+
+        keyword_rank = 1
+        total_keywords = len(all_keywords_volume)
+        for i, (kw, count) in enumerate(all_keywords_volume, 1):
+            if kw == keyword:
+                keyword_rank = i
+                break
+
+        avg_confidence = (
+            session.query(func.avg(SentimentAnalysis.confidence_score))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= start_date,
+            )
+            .scalar()
+            or 0.0
+        )
+
+        hourly_activity = (
+            session.query(
+                func.extract("hour", SentimentAnalysis.analyzed_at).label("hour"),
+                func.count(SentimentAnalysis.id).label("post_count"),
+            )
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(
+                RawPost.search_keyword == keyword,
+                func.date(SentimentAnalysis.analyzed_at) >= start_date,
+            )
+            .group_by(func.extract("hour", SentimentAnalysis.analyzed_at))
+            .order_by(func.count(SentimentAnalysis.id).desc())
+            .limit(3)
+            .all()
+        )
+
+        peak_hours = (
+            [f"{int(hour):02d}:00" for hour, count in hourly_activity]
+            if hourly_activity
+            else []
+        )
+
+        return {
+            "trend_analysis": {
+                "sentiment_change": round(sentiment_change, 1),
+                "current_sentiment": round(current_sentiment * 100, 1),
+                "trend_direction": (
+                    "improving"
+                    if sentiment_change > 5
+                    else "declining" if sentiment_change < -5 else "stable"
+                ),
+                "best_day": best_day_data[0] if best_day_data else None,
+                "best_sentiment": (
+                    round(best_day_data[1] * 100, 1) if best_day_data else 0.0
+                ),
+                "worst_day": worst_day_data[0] if worst_day_data else None,
+                "worst_sentiment": (
+                    round(worst_day_data[1] * 100, 1) if worst_day_data else 0.0
+                ),
+            },
+            "volume_stats": {
+                "total_posts": current_posts,
+                "keyword_rank": keyword_rank,
+                "total_keywords": total_keywords,
+                "daily_average": round(current_posts / days, 1),
+            },
+            "performance_metrics": {
+                "avg_confidence": round(avg_confidence * 100, 1),
+                "quality_rating": (
+                    "high"
+                    if avg_confidence > 0.8
+                    else "medium" if avg_confidence > 0.6 else "low"
+                ),
+            },
+            "activity_patterns": {
+                "peak_hours": peak_hours[:2],
+                "analysis_period": f"{days} days",
+            },
+        }
+
+    def _get_multi_keyword_insights(
+        self, session, keywords: List[str], days: int
+    ) -> Dict[str, Any]:
+        """Get comparative insights for multiple keywords."""
+        from datetime import timedelta
+
+        end_date = datetime.now(timezone.utc).date()
+        start_date = end_date - timedelta(days=days)
+
+        keyword_data = {}
+        for keyword in keywords:
+            posts_count = (
+                session.query(func.count(SentimentAnalysis.id))
+                .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+                .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+                .filter(
+                    RawPost.search_keyword == keyword,
+                    func.date(SentimentAnalysis.analyzed_at) >= start_date,
+                )
+                .scalar()
+                or 0
+            )
+
+            avg_sentiment = (
+                session.query(func.avg(SentimentAnalysis.positive_score))
+                .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+                .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+                .filter(
+                    RawPost.search_keyword == keyword,
+                    func.date(SentimentAnalysis.analyzed_at) >= start_date,
+                )
+                .scalar()
+                or 0.0
+            )
+
+            keyword_data[keyword] = {
+                "posts": posts_count,
+                "sentiment": round(avg_sentiment * 100, 1),
+            }
+
+        top_performer = max(keyword_data.items(), key=lambda x: x[1]["posts"])
+        best_sentiment = max(keyword_data.items(), key=lambda x: x[1]["sentiment"])
+
+        return {
+            "trend_analysis": {
+                "comparison_type": "multiple_keywords",
+                "selected_count": len(keywords),
+            },
+            "volume_stats": {
+                "top_performer": top_performer[0],
+                "top_posts": top_performer[1]["posts"],
+                "total_posts": sum(data["posts"] for data in keyword_data.values()),
+            },
+            "performance_metrics": {
+                "best_sentiment_keyword": best_sentiment[0],
+                "best_sentiment_score": best_sentiment[1]["sentiment"],
+                "avg_sentiment": round(
+                    sum(data["sentiment"] for data in keyword_data.values())
+                    / len(keywords),
+                    1,
+                ),
+            },
+            "activity_patterns": {
+                "keywords_analyzed": list(keywords),
+                "analysis_period": f"{days} days",
+            },
+        }
+
+    def _get_platform_insights(self, session, days: int) -> Dict[str, Any]:
+        """Get platform-wide insights when all keywords are selected."""
+        from datetime import timedelta
+
+        end_date = datetime.now(timezone.utc).date()
+        start_date = end_date - timedelta(days=days)
+
+        total_posts = (
+            session.query(func.count(SentimentAnalysis.id))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
+            .scalar()
+            or 0
+        )
+
+        avg_platform_sentiment = (
+            session.query(func.avg(SentimentAnalysis.positive_score))
+            .join(CleanedPost, SentimentAnalysis.cleaned_post_id == CleanedPost.id)
+            .join(RawPost, CleanedPost.raw_post_id == RawPost.id)
+            .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
+            .scalar()
+            or 0.0
+        )
+
+        top_keywords = (
+            session.query(
+                RawPost.search_keyword,
+                func.count(SentimentAnalysis.id).label("post_count"),
+            )
+            .join(CleanedPost, RawPost.id == CleanedPost.raw_post_id)
+            .join(
+                SentimentAnalysis, CleanedPost.id == SentimentAnalysis.cleaned_post_id
+            )
+            .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
+            .group_by(RawPost.search_keyword)
+            .order_by(func.count(SentimentAnalysis.id).desc())
+            .limit(3)
+            .all()
+        )
+
+        return {
+            "trend_analysis": {
+                "platform_sentiment": round(avg_platform_sentiment * 100, 1),
+                "analysis_type": "platform_wide",
+            },
+            "volume_stats": {
+                "total_posts": total_posts,
+                "daily_average": round(total_posts / days, 1),
+                "top_keywords": [kw for kw, count in top_keywords],
+            },
+            "performance_metrics": {
+                "platform_health": (
+                    "healthy" if avg_platform_sentiment > 0.5 else "mixed"
+                ),
+                "total_keywords": len(top_keywords),
+            },
+            "activity_patterns": {
+                "scope": "all_keywords",
+                "analysis_period": f"{days} days",
+            },
+        }
 
 
 db_operations = None
