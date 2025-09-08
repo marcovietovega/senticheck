@@ -51,16 +51,14 @@ def render_single_keyword_insights(keyword: str):
         col1, col2 = st.columns(2, gap="large")
 
         with col1:
-            render_trend_analysis_card(insights_data.get("trend_analysis", {}), keyword)
-            render_volume_stats_card(insights_data.get("volume_stats", {}), keyword)
+            render_trend_analysis_card(insights_data.get("trend_analysis", {}))
+            render_volume_stats_card(insights_data.get("volume_stats", {}))
 
         with col2:
             render_performance_metrics_card(
-                insights_data.get("performance_metrics", {}), keyword
+                insights_data.get("performance_metrics", {})
             )
-            render_activity_patterns_card(
-                insights_data.get("activity_patterns", {}), keyword
-            )
+            render_activity_patterns_card(insights_data.get("activity_patterns", {}))
 
     except Exception as e:
         logger.error(f"Error rendering single keyword insights for {keyword}: {e}")
@@ -147,7 +145,7 @@ def render_platform_insights():
         st.error("❌ Error loading platform insights.")
 
 
-def render_trend_analysis_card(trend_data: Dict[str, Any], keyword: str):
+def render_trend_analysis_card(trend_data: Dict[str, Any]):
     """Render trend analysis card for single keyword."""
     current_sentiment = trend_data.get("current_sentiment", 0)
     sentiment_change = trend_data.get("sentiment_change", 0)
@@ -192,7 +190,7 @@ def render_trend_analysis_card(trend_data: Dict[str, Any], keyword: str):
     st.markdown(card_html, unsafe_allow_html=True)
 
 
-def render_volume_stats_card(volume_data: Dict[str, Any], keyword: str):
+def render_volume_stats_card(volume_data: Dict[str, Any]):
     """Render volume stats card for single keyword."""
     total_posts = volume_data.get("total_posts", 0)
     keyword_rank = volume_data.get("keyword_rank", 0)
@@ -232,7 +230,7 @@ def render_volume_stats_card(volume_data: Dict[str, Any], keyword: str):
     st.markdown(card_html, unsafe_allow_html=True)
 
 
-def render_performance_metrics_card(performance_data: Dict[str, Any], keyword: str):
+def render_performance_metrics_card(performance_data: Dict[str, Any]):
     """Render performance metrics card for single keyword."""
     avg_confidence = performance_data.get("avg_confidence", 0)
 
@@ -269,7 +267,7 @@ def render_performance_metrics_card(performance_data: Dict[str, Any], keyword: s
     st.markdown(card_html, unsafe_allow_html=True)
 
 
-def render_activity_patterns_card(activity_data: Dict[str, Any], keyword: str):
+def render_activity_patterns_card(activity_data: Dict[str, Any]):
     """Render activity patterns card for single keyword."""
     peak_hours = activity_data.get("peak_hours", [])
 
