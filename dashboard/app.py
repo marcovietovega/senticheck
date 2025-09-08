@@ -14,7 +14,7 @@ from dashboard.charts import (
     render_sentiment_distribution_chart,
     render_volume_analysis_chart,
 )
-from dashboard.styles import apply_styles, apply_dropdown_styles
+from dashboard.styles import apply_all_styles
 from dashboard.data_service import get_dashboard_data_service
 from dashboard.components import render_keyword_selector, render_insights_section
 
@@ -34,11 +34,11 @@ def render_page_title():
     """Render the main page title"""
     st.markdown(
         """
-        <div style="text-align: center; margin-bottom: 32px;">
-            <h1 style="font-size: 48px; font-weight: 600; margin-bottom: 8px; color: #111827;">
+        <div class="page-title-container">
+            <h1 class="page-title">
                 📊 SentiCheck
             </h1>
-            <div style="color: #6b7280; font-size: 18px; line-height: 1.5;">
+            <div class="page-subtitle">
                 Real-time sentiment insights from social media posts
             </div>
         </div>
@@ -149,7 +149,7 @@ def render_kpi_section(selected_keywords=None):
                     help_text="Average confidence score of sentiment predictions",
                 )
 
-        st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
+        st.markdown('<div class="spacing-top-2xl"></div>', unsafe_allow_html=True)
 
         if keyword_kpis:
             col4, col5, col6 = st.columns(3, gap="medium")
@@ -202,7 +202,7 @@ def render_kpi_section(selected_keywords=None):
                     help_text=f"{selected_keyword} ranks #{rank} by total post count",
                 )
 
-            st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
+            st.markdown('<div class="spacing-top-2xl"></div>', unsafe_allow_html=True)
 
             col7, col8, col9 = st.columns(3, gap="medium")
 
@@ -317,8 +317,7 @@ def render_chart_section():
 def main():
     """Main dashboard application."""
     configure_page()
-    apply_styles()
-    apply_dropdown_styles()
+    apply_all_styles()
 
     render_page_title()
 
