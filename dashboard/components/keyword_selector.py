@@ -40,12 +40,7 @@ def render_keyword_selector() -> Optional[List[str]]:
             st.warning("⚠️ No valid keywords found in database.")
             return ["AI"]
 
-        st.markdown(
-            """
-        <div style="background: #f9fafb; padding: 16px; border-radius: 12px; margin-bottom: 24px;">
-        """,
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="keyword-selector-container">', unsafe_allow_html=True)
 
         col1, col2 = st.columns([3, 1])
 
@@ -88,7 +83,7 @@ def render_keyword_selector() -> Optional[List[str]]:
         return selected_keywords
 
     except Exception as e:
-        st.error(f"❌ Error loading keywords: {e}")
+        st.error(f"Error loading keywords: {e}")
         return ["AI"]
 
 
@@ -119,22 +114,24 @@ def render_keyword_performance_summary(selected_keywords: Optional[List[str]] = 
                 pos_pct = metrics.get("positive_percentage", 0)
                 color = "green" if pos_pct > 20 else "orange" if pos_pct > 10 else "red"
 
+                border_class = (
+                    "border-left-success"
+                    if color == "green"
+                    else (
+                        "border-left-warning"
+                        if color == "orange"
+                        else "border-left-danger"
+                    )
+                )
+
                 st.markdown(
                     f"""
-                <div style="
-                    background: white; 
-                    padding: 16px; 
-                    border-radius: 8px; 
-                    border-left: 4px solid {color};
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                ">
-                    <h4 style="margin: 0; color: #1f2937;">🏷️ {keyword}</h4>
-                    <p style="margin: 8px 0 4px 0; font-size: 14px; color: #6b7280;">
-                        {metrics.get("total_posts", 0):,} posts analyzed
-                    </p>
-                    <div style="display: flex; justify-content: space-between; margin-top: 8px;">
-                        <span style="color: #10b981;">↗️ {pos_pct:.1f}%</span>
-                        <span style="color: #6b7280;">📊 {metrics.get("avg_confidence", 0):.1f}%</span>
+                <div class="keyword-performance-card {border_class}">
+                    <h4>🏷️ {keyword}</h4>
+                    <p>{metrics.get("total_posts", 0):,} posts analyzed</p>
+                    <div class="keyword-performance-stats">
+                        <span class="keyword-performance-positive">↗️ {pos_pct:.1f}%</span>
+                        <span class="keyword-performance-confidence">📊 {metrics.get("avg_confidence", 0):.1f}%</span>
                     </div>
                 </div>
                 """,
