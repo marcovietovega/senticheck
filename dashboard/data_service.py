@@ -438,6 +438,42 @@ class DashboardDataService:
                 "posts_today": 0,
             }
 
+    def get_keyword_insights(
+        self, selected_keywords: Optional[List[str]], days: int = 7
+    ) -> Dict[str, Any]:
+        """
+        Get keyword insights data with caching.
+
+        Args:
+            selected_keywords: List of keywords to analyze, None for all
+            days: Number of days to analyze (7, 15, or 30)
+
+        Returns:
+            Dictionary with insights data
+        """
+        try:
+            cache_key = f"keyword_insights_{selected_keywords or 'all'}_{days}"
+            cached_data = self._get_cached_data(cache_key)
+            if cached_data is not None:
+                return cached_data
+
+            insights_data = self.db_manager.get_keyword_insights(
+                selected_keywords, days
+            )
+
+            self._set_cache_data(cache_key, insights_data)
+
+            return insights_data
+
+        except Exception as e:
+            logger.error(f"Error getting keyword insights: {e}")
+            return {
+                "trend_analysis": {},
+                "volume_stats": {},
+                "performance_metrics": {},
+                "activity_patterns": {},
+            }
+
 
 # Global data service instance
 _data_service = None
