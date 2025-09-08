@@ -33,6 +33,10 @@ def apply_styles():
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
         
+        .metric-card-insights {
+            height: 180px;
+        }
+        
         .metric-header {
             display: flex;
             justify-content: center;
