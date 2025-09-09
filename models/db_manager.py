@@ -764,6 +764,19 @@ class SentiCheckDBManager:
         """
         return self.db_ops.get_keyword_insights(selected_keywords, days)
 
+    def get_text_analysis_for_keywords(self, selected_keywords: List[str], days: int = 30) -> List[Dict]:
+        """
+        Get text content and sentiment data for word cloud analysis.
+        
+        Args:
+            selected_keywords: List of keywords to analyze
+            days: Number of days of historical data
+            
+        Returns:
+            List of dictionaries with cleaned_text and sentiment_score
+        """
+        return self.db_ops.get_text_analysis_for_keywords(selected_keywords, days)
+
 
 db_manager = None
 
