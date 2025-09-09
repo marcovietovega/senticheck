@@ -8,13 +8,21 @@ All charts maintain consistent styling while displaying keyword-specific data.
 
 import plotly.graph_objects as go
 import sys
+import logging
 from pathlib import Path
 from typing import List, Optional
+
+try:
+    from wordcloud import WordCloud
+except ImportError:
+    WordCloud = None
 
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
 from dashboard.data_service import get_dashboard_data_service
+
+logger = logging.getLogger(__name__)
 
 
 class ChartTemplate:
@@ -202,7 +210,9 @@ class ChartTemplate:
             Plotly Figure with volume analysis
         """
         try:
-            chart_data = self.data_service.get_sentiment_over_time(days=days, selected_keywords=self.selected_keywords)
+            chart_data = self.data_service.get_sentiment_over_time(
+                days=days, selected_keywords=self.selected_keywords
+            )
 
             chart_data["total_volume"] = chart_data[
                 ["positive", "negative", "neutral"]
@@ -253,6 +263,69 @@ class ChartTemplate:
                 title=f"Error loading volume analysis: {str(e)}", **self.layout_defaults
             )
             return fig
+
+    def render_wordcloud(self, days: int = 30) -> Optional[object]:
+        """
+        Template for word cloud visualization (single keyword only).
+
+        Args:
+            days: Number of days of data to analyze
+
+        Returns:
+            PIL Image object for word cloud or None if invalid
+        """
+        if not self.selected_keywords or len(self.selected_keywords) != 1:
+            return None
+
+        try:
+            if WordCloud is None:
+                logger.error("WordCloud library not installed")
+                return None
+
+            wc_data = self.data_service.get_wordcloud_data(self.selected_keywords, days)
+
+            if not wc_data["word_frequencies"]:
+                return None
+
+            def sentiment_color_function(
+                word, _font_size, _position, _orientation, **_kwargs
+            ):
+                sentiment = wc_data["word_sentiments"].get(word, 0.5)
+
+                if sentiment > 0.6:
+                    green_intensity = int(46 + sentiment * 100)
+                    return f"rgb({green_intensity}, 150, 50)"
+                elif sentiment < 0.4:
+                    red_intensity = int(198 + (1 - sentiment) * 57)
+                    return f"rgb({red_intensity}, 40, 40)"
+                else:
+                    return "rgb(25, 118, 210)"
+
+            wordcloud = WordCloud(
+                width=400,
+                height=200,
+                background_color="white",
+                max_words=50,
+                color_func=sentiment_color_function,
+                prefer_horizontal=0.85,
+                min_font_size=12,
+                max_font_size=28,
+                relative_scaling=0.4,
+                random_state=42,
+                margin=8,
+                collocations=False,
+                scale=3,
+                mode="RGBA",
+            ).generate_from_frequencies(wc_data["word_frequencies"])
+
+            return wordcloud.to_image()
+
+        except ImportError as e:
+            logger.error(f"WordCloud library not installed: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error generating word cloud: {e}")
+            return None
 
 
 def create_chart_template(

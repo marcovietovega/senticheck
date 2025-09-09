@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
 import logging
+import traceback
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy import func, case
+from sqlalchemy import func, case, and_
+from sqlalchemy.dialects.postgresql import insert
 
 
 from .database import (
@@ -45,7 +47,6 @@ class DatabaseOperations:
 
     def _store_raw_posts_batch(self, posts_data: List[Dict]) -> int:
         """Batch insert posts using PostgreSQL ON CONFLICT DO NOTHING."""
-        from sqlalchemy.dialects.postgresql import insert
 
         stored_count = 0
 
@@ -249,10 +250,12 @@ class DatabaseOperations:
             with self.db_connection.get_session() as session:
                 # Get search_keyword from raw_post if not provided
                 if search_keyword is None:
-                    cleaned_post = session.query(CleanedPost).filter_by(id=cleaned_post_id).first()
+                    cleaned_post = (
+                        session.query(CleanedPost).filter_by(id=cleaned_post_id).first()
+                    )
                     if cleaned_post and cleaned_post.raw_post:
                         search_keyword = cleaned_post.raw_post.search_keyword
-                
+
                 sentiment_analysis = SentimentAnalysis(
                     cleaned_post_id=cleaned_post_id,
                     sentiment_label=sentiment_label,
@@ -316,7 +319,7 @@ class DatabaseOperations:
                         )
                         if cleaned_post and cleaned_post.raw_post:
                             search_keyword = cleaned_post.raw_post.search_keyword
-                    
+
                     sentiment_analysis = SentimentAnalysis(
                         cleaned_post_id=result["cleaned_post_id"],
                         sentiment_label=result["sentiment_label"],
@@ -645,7 +648,7 @@ class DatabaseOperations:
                     today_query = today_query.filter(
                         SentimentAnalysis.search_keyword.in_(selected_keywords)
                     )
-                
+
                 today_query = today_query.filter(
                     func.date(SentimentAnalysis.analyzed_at) == today
                 )
@@ -733,7 +736,6 @@ class DatabaseOperations:
 
     def _get_posts_this_week(self, session, keyword: str) -> Dict[str, Any]:
         """Get posts this week with trend vs last week."""
-        from datetime import timedelta
 
         today = datetime.now(timezone.utc).date()
         week_start = today - timedelta(days=today.weekday())
@@ -780,7 +782,6 @@ class DatabaseOperations:
 
     def _get_sentiment_momentum(self, session, keyword: str) -> Dict[str, Any]:
         """Calculate if sentiment is improving or declining."""
-        from datetime import timedelta
 
         today = datetime.now(timezone.utc).date()
         three_days_ago = today - timedelta(days=3)
@@ -853,7 +854,8 @@ class DatabaseOperations:
         """Get rank of this keyword by total posts vs other keywords."""
         keyword_counts = (
             session.query(
-                SentimentAnalysis.search_keyword, func.count(SentimentAnalysis.id).label("post_count")
+                SentimentAnalysis.search_keyword,
+                func.count(SentimentAnalysis.id).label("post_count"),
             )
             .filter(SentimentAnalysis.search_keyword.isnot(None))
             .group_by(SentimentAnalysis.search_keyword)
@@ -873,7 +875,6 @@ class DatabaseOperations:
 
     def _get_daily_average(self, session, keyword: str) -> float:
         """Get average posts per day for this keyword."""
-        from datetime import timedelta
 
         thirty_days_ago = datetime.now(timezone.utc).date() - timedelta(days=30)
 
@@ -891,7 +892,6 @@ class DatabaseOperations:
 
     def _get_peak_performance(self, session, keyword: str) -> Dict[str, Any]:
         """Get the best sentiment day for this keyword."""
-        from datetime import timedelta
 
         thirty_days_ago = datetime.now(timezone.utc).date() - timedelta(days=30)
 
@@ -972,7 +972,6 @@ class DatabaseOperations:
         self, session, keyword: str, days: int
     ) -> Dict[str, Any]:
         """Get insights for a single keyword."""
-        from datetime import timedelta
 
         end_date = datetime.now(timezone.utc).date()
         start_date = end_date - timedelta(days=days)
@@ -1050,7 +1049,7 @@ class DatabaseOperations:
             )
             .filter(
                 func.date(SentimentAnalysis.analyzed_at) >= start_date,
-                SentimentAnalysis.search_keyword.isnot(None)
+                SentimentAnalysis.search_keyword.isnot(None),
             )
             .group_by(SentimentAnalysis.search_keyword)
             .order_by(func.count(SentimentAnalysis.id).desc())
@@ -1137,7 +1136,6 @@ class DatabaseOperations:
         self, session, keywords: List[str], days: int
     ) -> Dict[str, Any]:
         """Get comparative insights for multiple keywords."""
-        from datetime import timedelta
 
         end_date = datetime.now(timezone.utc).date()
         start_date = end_date - timedelta(days=days)
@@ -1199,7 +1197,6 @@ class DatabaseOperations:
 
     def _get_platform_insights(self, session, days: int) -> Dict[str, Any]:
         """Get platform-wide insights when all keywords are selected."""
-        from datetime import timedelta
 
         end_date = datetime.now(timezone.utc).date()
         start_date = end_date - timedelta(days=days)
@@ -1225,7 +1222,7 @@ class DatabaseOperations:
             )
             .filter(
                 func.date(SentimentAnalysis.analyzed_at) >= start_date,
-                SentimentAnalysis.search_keyword.isnot(None)
+                SentimentAnalysis.search_keyword.isnot(None),
             )
             .group_by(SentimentAnalysis.search_keyword)
             .order_by(func.count(SentimentAnalysis.id).desc())
@@ -1254,6 +1251,65 @@ class DatabaseOperations:
                 "analysis_period": f"{days} days",
             },
         }
+
+    def get_text_analysis_for_keywords(
+        self, selected_keywords: List[str], days: int = 30
+    ) -> List[Dict]:
+        """
+        Get text content and sentiment data for word cloud analysis.
+
+        Args:
+            selected_keywords: List of keywords to analyze
+            days: Number of days of historical data
+
+        Returns:
+            List of dictionaries with cleaned_text and sentiment_score
+        """
+        try:
+            with self.db_connection.get_session() as session:
+                date_threshold = datetime.now() - timedelta(days=days)
+
+                query = (
+                    session.query(
+                        CleanedPost.cleaned_text,
+                        SentimentAnalysis.sentiment_label,
+                        SentimentAnalysis.confidence_score,
+                    )
+                    .join(
+                        SentimentAnalysis,
+                        CleanedPost.id == SentimentAnalysis.cleaned_post_id,
+                    )
+                    .filter(
+                        and_(
+                            SentimentAnalysis.search_keyword.in_(selected_keywords),
+                            SentimentAnalysis.analyzed_at >= date_threshold,
+                            SentimentAnalysis.confidence_score > 0.5,
+                            func.length(CleanedPost.cleaned_text) > 10,
+                        )
+                    )
+                    .order_by(SentimentAnalysis.analyzed_at.desc())
+                    .limit(15000)
+                )
+
+                results = query.all()
+
+                return [
+                    {
+                        "cleaned_text": row.cleaned_text,
+                        "sentiment_score": (
+                            0.8
+                            if row.sentiment_label == "positive"
+                            else 0.2 if row.sentiment_label == "negative" else 0.5
+                        ),
+                    }
+                    for row in results
+                ]
+
+        except Exception as e:
+            logger.error(f"Error getting text analysis data: {e}")
+
+            traceback.print_exc()
+            return []
 
 
 db_operations = None
