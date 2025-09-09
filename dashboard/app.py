@@ -303,6 +303,8 @@ def render_kpi_section(selected_keywords=None):
 
 def render_chart_section():
     """Render the charts section."""
+    selected_keywords = st.session_state.get("selected_keywords", [])
+
     render_sentiment_over_time_chart()
 
     col1, col2 = st.columns(2, gap="large")
@@ -312,6 +314,11 @@ def render_chart_section():
 
     with col2:
         render_volume_analysis_chart()
+
+    if selected_keywords and len(selected_keywords) == 1:
+        from dashboard.components.wordcloud_section import render_wordcloud_section
+
+        render_wordcloud_section(selected_keywords)
 
 
 def main():
