@@ -13,6 +13,7 @@ sys.path.insert(0, str(parent_dir))
 
 from models.db_manager import get_db_manager
 from dashboard.config import DASHBOARD_CONFIG
+from dashboard.wordcloud_filters import get_stop_words
 
 logger = logging.getLogger(__name__)
 
@@ -473,6 +474,116 @@ class DashboardDataService:
                 "performance_metrics": {},
                 "activity_patterns": {},
             }
+
+    def get_wordcloud_data(
+        self, selected_keywords: List[str], days: int = 30
+    ) -> Dict[str, Any]:
+        """
+        Get word frequency and sentiment data for word cloud generation.
+
+        Args:
+            selected_keywords: List of keywords (should be exactly one for word cloud)
+            days: Number of days of historical data to analyze
+
+        Returns:
+            Dictionary with word frequencies, sentiment associations, and metadata
+        """
+        if not selected_keywords or len(selected_keywords) != 1:
+            return {
+                "word_frequencies": {},
+                "word_sentiments": {},
+                "total_posts": 0,
+                "date_range": "",
+            }
+
+        keyword = selected_keywords[0]
+        cache_key = f"wordcloud_data_{keyword}_{days}"
+        cached_data = self._get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data
+
+        try:
+            text_data = self.db_manager.get_text_analysis_for_keywords([keyword], days)
+
+            if not text_data:
+                empty_result = {
+                    "word_frequencies": {},
+                    "word_sentiments": {},
+                    "total_posts": 0,
+                    "date_range": "",
+                }
+                self._set_cache_data(cache_key, empty_result)
+                return empty_result
+
+            word_frequencies, word_sentiments = self._process_text_for_wordcloud(
+                text_data
+            )
+
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=days - 1)
+            date_range = (
+                f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+            )
+
+            result = {
+                "word_frequencies": word_frequencies,
+                "word_sentiments": word_sentiments,
+                "total_posts": len(text_data),
+                "date_range": date_range,
+            }
+
+            self._set_cache_data(cache_key, result)
+            return result
+
+        except Exception as e:
+            logger.error(f"Error getting wordcloud data: {e}")
+            return {
+                "word_frequencies": {},
+                "word_sentiments": {},
+                "total_posts": 0,
+                "date_range": "",
+            }
+
+    def _process_text_for_wordcloud(self, text_data: List[Dict]) -> tuple:
+        """
+        Process text data to extract word frequencies and sentiment associations.
+
+        Args:
+            text_data: List of dictionaries with text and sentiment data
+
+        Returns:
+            Tuple of (word_frequencies, word_sentiments)
+        """
+        import re
+        from collections import Counter
+
+        stop_words = get_stop_words()
+
+        all_words = []
+        word_sentiment_data = {}
+
+        for item in text_data:
+            text = item.get("cleaned_text", "").lower()
+            sentiment_score = float(item.get("sentiment_score", 0.5))
+
+            words = re.findall(r"\b[a-zA-Z]{3,}\b", text)
+
+            for word in words:
+                if word not in stop_words and len(word) >= 3:
+                    all_words.append(word)
+
+                    if word not in word_sentiment_data:
+                        word_sentiment_data[word] = []
+                    word_sentiment_data[word].append(sentiment_score)
+
+        word_frequencies = dict(Counter(all_words).most_common(100))
+
+        word_sentiments = {}
+        for word, sentiments in word_sentiment_data.items():
+            if word in word_frequencies:
+                word_sentiments[word] = sum(sentiments) / len(sentiments)
+
+        return word_frequencies, word_sentiments
 
 
 # Global data service instance
