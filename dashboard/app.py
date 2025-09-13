@@ -16,7 +16,12 @@ from dashboard.charts import (
 )
 from dashboard.styles import apply_all_styles
 from dashboard.data_service import get_dashboard_data_service
-from dashboard.components import render_keyword_selector, render_insights_section
+from dashboard.components import (
+    render_insights_section,
+    render_sidebar_controls,
+    update_session_state_from_sidebar,
+)
+from dashboard.components.wordcloud_section import render_wordcloud_section
 
 
 def configure_page():
@@ -25,7 +30,7 @@ def configure_page():
         page_title="SentiCheck",
         page_icon="📊",
         layout="wide",
-        initial_sidebar_state="collapsed",
+        initial_sidebar_state="expanded",
         menu_items={"About": "SentiCheck - Sentiment analysis dashboard"},
     )
 
@@ -39,7 +44,7 @@ def render_page_title():
                 📊 SentiCheck
             </h1>
             <div class="page-subtitle">
-                Real-time sentiment insights from social media posts
+                Sentiment insights from social media posts
             </div>
         </div>
         """,
@@ -86,7 +91,7 @@ def render_kpi_section(selected_keywords=None):
             keyword_text = selected_keyword
             st.header(f"Key Performance Indicators - {keyword_text}")
         else:
-            selected_keyword = "AI"  # Default keyword
+            selected_keyword = "AI"
             st.header("Key Performance Indicators - All Keywords")
 
         st.markdown("---")
@@ -301,9 +306,10 @@ def render_kpi_section(selected_keywords=None):
         st.text(traceback.format_exc())
 
 
-def render_chart_section():
+def render_chart_section(selected_keywords=None):
     """Render the charts section."""
-    selected_keywords = st.session_state.get("selected_keywords", [])
+    if selected_keywords is None:
+        selected_keywords = []
 
     render_sentiment_over_time_chart()
 
@@ -315,10 +321,7 @@ def render_chart_section():
     with col2:
         render_volume_analysis_chart()
 
-    if selected_keywords and len(selected_keywords) == 1:
-        from dashboard.components.wordcloud_section import render_wordcloud_section
-
-        render_wordcloud_section(selected_keywords)
+    render_wordcloud_section(selected_keywords)
 
 
 def main():
@@ -328,18 +331,17 @@ def main():
 
     render_page_title()
 
-    selected_keywords = render_keyword_selector()
+    sidebar_data = render_sidebar_controls()
+    update_session_state_from_sidebar(sidebar_data)
 
-    if selected_keywords:
-        st.session_state["selected_keywords"] = selected_keywords
-    else:
-        st.session_state["selected_keywords"] = None
+    selected_keyword = sidebar_data["selected_keyword"]
+    selected_keywords = [selected_keyword]
 
     render_kpi_section(selected_keywords)
 
     render_insights_section(selected_keywords)
 
-    render_chart_section()
+    render_chart_section(selected_keywords)
 
 
 if __name__ == "__main__":
