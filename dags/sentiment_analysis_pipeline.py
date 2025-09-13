@@ -7,6 +7,7 @@ Analyzes sentiment via HTTP API calls and stores results in the database.
 
 import os
 import sys
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any
 
@@ -22,6 +23,8 @@ if project_root not in sys.path:
 
 from models.db_manager import SentiCheckDBManager
 from ml_service.client import create_sentiment_client
+
+logger = logging.getLogger(__name__)
 
 default_args = {
     "owner": "senticheck",
@@ -51,20 +54,20 @@ def check_database_connection(**context) -> Dict[str, Any]:
         Database statistics
     """
     try:
-        print("Checking database connection for sentiment analysis...")
+        logger.info("Checking database connection for sentiment analysis...")
 
         db_manager = SentiCheckDBManager()
 
         if not db_manager.test_connection():
             raise Exception("Database connection test failed")
 
-        print("Database connection successful")
+        logger.info("Database connection successful")
 
         # Get current statistics
         stats = db_manager.get_database_stats()
-        print(f"Database Statistics:")
+        logger.info("Database Statistics:")
         for key, value in stats.items():
-            print(f"  {key.replace('_', ' ').title()}: {value}")
+            logger.info("  %s: %s", key.replace('_', ' ').title(), value)
 
         return {
             "status": "success",
@@ -73,7 +76,7 @@ def check_database_connection(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"Error checking database connection: {str(e)}")
+        logger.error("Error checking database connection: %s", str(e))
         raise
 
 
@@ -84,18 +87,18 @@ def check_unanalyzed_posts(**context) -> Dict[str, Any]:
         Unanalyzed posts information
     """
     try:
-        print("Checking for unanalyzed posts...")
+        logger.info("Checking for unanalyzed posts...")
 
         db_manager = SentiCheckDBManager()
 
-        print("Getting all unanalyzed posts from database...")
+        logger.info("Getting all unanalyzed posts from database...")
         unanalyzed_posts = db_manager.get_unanalyzed_posts(limit=None)
         unanalyzed_count = len(unanalyzed_posts)
 
-        print(f"Found {unanalyzed_count} total unanalyzed posts to process")
+        logger.info("Found %d total unanalyzed posts to process", unanalyzed_count)
 
         if unanalyzed_count == 0:
-            print("No posts to analyze - skipping sentiment analysis pipeline")
+            logger.info("No posts to analyze - skipping sentiment analysis pipeline")
             return {
                 "status": "success",
                 "unanalyzed_count": 0,
@@ -105,10 +108,10 @@ def check_unanalyzed_posts(**context) -> Dict[str, Any]:
 
         # Show sample of posts to be analyzed
         sample_size = min(3, unanalyzed_count)
-        print(f"\nSample of posts to be analyzed (first {sample_size}):")
+        logger.info("Sample of posts to be analyzed (first %d):", sample_size)
         for i, post in enumerate(unanalyzed_posts[:sample_size], 1):
             preview = post.cleaned_text[:100] if post.cleaned_text else "No text"
-            print(f"  [{i}] {preview}...")
+            logger.info("  [%d] %s...", i, preview)
 
         return {
             "status": "success",
@@ -127,7 +130,7 @@ def check_unanalyzed_posts(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"Error checking unanalyzed posts: {str(e)}")
+        logger.error("Error checking unanalyzed posts: %s", str(e))
         raise
 
 
@@ -141,7 +144,7 @@ def analyze_sentiment(**context) -> Dict[str, Any]:
     check_result = context["ti"].xcom_pull(task_ids="check_unanalyzed_posts")
 
     if check_result.get("unanalyzed_count", 0) == 0:
-        print("No posts to analyze - skipping")
+        logger.info("No posts to analyze - skipping")
         return {
             "status": "success",
             "analyzed_count": 0,
@@ -149,7 +152,7 @@ def analyze_sentiment(**context) -> Dict[str, Any]:
         }
 
     try:
-        print("Starting sentiment analysis pipeline with FastAPI service...")
+        logger.info("Starting sentiment analysis pipeline with FastAPI service...")
 
         db_manager = SentiCheckDBManager()
 
@@ -158,48 +161,48 @@ def analyze_sentiment(**context) -> Dict[str, Any]:
             default="cardiffnlp/twitter-roberta-base-sentiment-latest",
         )
 
-        print(f"Configuration:")
-        print(f"  Process ALL pending posts (no batch limit)")
-        print(f"  Model: {model_name}")
-        print(f"  Service: Using FastAPI HTTP client (no deadlock risk)")
+        logger.info("Configuration:")
+        logger.info("  Process ALL pending posts (no batch limit)")
+        logger.info("  Model: %s", model_name)
+        logger.info("  Service: Using FastAPI HTTP client (no deadlock risk)")
 
         # Step 1: Create HTTP client and check service health
-        print("Checking FastAPI service health...")
+        logger.info("Checking FastAPI service health...")
         with create_sentiment_client() as client:
             try:
                 health = client.check_health()
-                print(f"Service is healthy: {health['status']}")
-                print(f"   Model loaded: {health.get('model_name', 'Unknown')}")
-                print(f"   Uptime: {health.get('uptime_seconds', 0):.1f}s")
+                logger.info("Service is healthy: %s", health['status'])
+                logger.info("   Model loaded: %s", health.get('model_name', 'Unknown'))
+                logger.info("   Uptime: %.1fs", health.get('uptime_seconds', 0))
             except Exception as e:
                 raise Exception(f"Sentiment analysis service is not available: {e}")
 
             # Step 2: Get ALL unanalyzed posts from database
-            print(f"Fetching ALL unanalyzed posts from database...")
+            logger.info("Fetching ALL unanalyzed posts from database...")
             cleaned_posts = db_manager.get_unanalyzed_posts(
                 limit=None
             )  # No limit = get all
 
             if not cleaned_posts:
-                print("No unanalyzed posts found in database")
+                logger.info("No unanalyzed posts found in database")
                 return {
                     "status": "success",
                     "analyzed_count": 0,
                     "message": "No unanalyzed posts found",
                 }
 
-            print(f"Found {len(cleaned_posts)} posts to analyze")
+            logger.info("Found %d posts to analyze", len(cleaned_posts))
 
             # Show sample of posts to be analyzed
             sample_size = min(3, len(cleaned_posts))
-            print(f"Sample posts to analyze (first {sample_size}):")
+            logger.info("Sample posts to analyze (first %d):", sample_size)
             for i, post in enumerate(cleaned_posts[:sample_size], 1):
                 preview = post.cleaned_text[:100] if post.cleaned_text else "No text"
-                print(f"  [{i}] {preview}...")
+                logger.info("  [%d] %s...", i, preview)
 
             # Step 3: Send posts to FastAPI service for analysis
-            print(
-                f"Sending {len(cleaned_posts)} posts to sentiment analysis service..."
+            logger.info(
+                "Sending %d posts to sentiment analysis service...", len(cleaned_posts)
             )
             sentiment_results = client.analyze_cleaned_posts(
                 cleaned_posts=cleaned_posts, model_name=model_name
@@ -210,21 +213,22 @@ def analyze_sentiment(**context) -> Dict[str, Any]:
                     "No results returned from sentiment analysis service"
                 )
 
-            print(f"Received {len(sentiment_results)} sentiment analysis results")
+            logger.info("Received %d sentiment analysis results", len(sentiment_results))
 
             # Step 4: Store results in database
-            print("Storing sentiment analysis results in database...")
+            logger.info("Storing sentiment analysis results in database...")
             analyzed_count = db_manager.store_sentiment_analysis_batch(
                 sentiment_results
             )
 
             if analyzed_count != len(sentiment_results):
-                print(
-                    f"Warning: Expected to store {len(sentiment_results)} results, but stored {analyzed_count}"
+                logger.warning(
+                    "Expected to store %d results, but stored %d",
+                    len(sentiment_results), analyzed_count
                 )
             else:
-                print(
-                    f"Successfully stored {analyzed_count} sentiment analysis results"
+                logger.info(
+                    "Successfully stored %d sentiment analysis results", analyzed_count
                 )
 
         # Get updated statistics
@@ -242,10 +246,7 @@ def analyze_sentiment(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"Error in sentiment analysis pipeline: {str(e)}")
-        import traceback
-
-        traceback.print_exc()
+        logger.error("Error in sentiment analysis pipeline: %s", str(e))
         raise
 
 
@@ -256,7 +257,7 @@ def validate_sentiment_results(**context) -> Dict[str, Any]:
         Validation results
     """
     try:
-        print("Validating sentiment analysis results...")
+        logger.info("Validating sentiment analysis results...")
 
         db_manager = SentiCheckDBManager()
 
@@ -265,7 +266,7 @@ def validate_sentiment_results(**context) -> Dict[str, Any]:
         analyzed_count = analysis_result.get("analyzed_count", 0)
 
         if analyzed_count == 0:
-            print("No posts were analyzed - validation complete")
+            logger.info("No posts were analyzed - validation complete")
             return {
                 "status": "success",
                 "validated_count": 0,
@@ -282,12 +283,12 @@ def validate_sentiment_results(**context) -> Dict[str, Any]:
             "issues": [],
         }
 
-        print(f"Validation Results:")
-        print(
-            f"  Total analyzed posts in DB: {validation_results['total_analyzed_posts']}"
+        logger.info("Validation Results:")
+        logger.info(
+            "  Total analyzed posts in DB: %d", validation_results['total_analyzed_posts']
         )
-        print(
-            f"  Posts analyzed in this run: {validation_results['recent_analysis_count']}"
+        logger.info(
+            "  Posts analyzed in this run: %d", validation_results['recent_analysis_count']
         )
 
         # Basic validation checks
@@ -301,11 +302,11 @@ def validate_sentiment_results(**context) -> Dict[str, Any]:
 
         # Show any issues found
         if validation_results["issues"]:
-            print(f"  Issues found: {len(validation_results['issues'])}")
+            logger.info("  Issues found: %d", len(validation_results['issues']))
             for issue in validation_results["issues"]:
-                print(f"    - {issue}")
+                logger.info("    - %s", issue)
         else:
-            print("  ✓ All validation checks passed")
+            logger.info("  ✓ All validation checks passed")
 
         success = validation_results["validation_passed"]
 
@@ -318,7 +319,7 @@ def validate_sentiment_results(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"Error validating sentiment results: {str(e)}")
+        logger.error("Error validating sentiment results: %s", str(e))
         raise
 
 
@@ -329,7 +330,7 @@ def generate_analysis_summary(**context) -> Dict[str, Any]:
         Pipeline summary
     """
     try:
-        print("Generating sentiment analysis pipeline summary...")
+        logger.info("Generating sentiment analysis pipeline summary...")
 
         db_manager = SentiCheckDBManager()
 
@@ -352,24 +353,25 @@ def generate_analysis_summary(**context) -> Dict[str, Any]:
             "pipeline_completion_time": datetime.now().isoformat(),
         }
 
-        print("=" * 60)
-        print("SENTIMENT ANALYSIS PIPELINE SUMMARY")
-        print("=" * 60)
-        print(f"Posts analyzed: {summary['pipeline_run']['analyzed_count']}")
-        print(f"Model used: {summary['pipeline_run']['model_used']}")
-        print(f"Processing mode: ALL pending posts (no batch limit)")
-        print(
-            f"Validation: {'✓ PASSED' if summary['pipeline_run']['validation_passed'] else 'FAILED'}"
+        logger.info("=" * 60)
+        logger.info("SENTIMENT ANALYSIS PIPELINE SUMMARY")
+        logger.info("=" * 60)
+        logger.info("Posts analyzed: %d", summary['pipeline_run']['analyzed_count'])
+        logger.info("Model used: %s", summary['pipeline_run']['model_used'])
+        logger.info("Processing mode: ALL pending posts (no batch limit)")
+        logger.info(
+            "Validation: %s", 
+            '✓ PASSED' if summary['pipeline_run']['validation_passed'] else 'FAILED'
         )
-        print("\nFinal Database State:")
+        logger.info("Final Database State:")
         for key, value in summary["database_final_state"].items():
-            print(f"  {key.replace('_', ' ').title()}: {value}")
-        print("=" * 60)
+            logger.info("  %s: %s", key.replace('_', ' ').title(), value)
+        logger.info("=" * 60)
 
         return summary
 
     except Exception as e:
-        print(f"Error generating summary: {str(e)}")
+        logger.error("Error generating summary: %s", str(e))
         raise
 
 
