@@ -9,7 +9,6 @@ import logging
 
 from dashboard.data_service import get_dashboard_data_service
 from dashboard.styles import (
-    get_trend_icon,
     get_rank_style,
     get_confidence_quality,
     format_time_12h,
@@ -38,7 +37,7 @@ def render_insights_section(selected_keywords: Optional[List[str]]):
 
 def render_single_keyword_insights(keyword: str):
     """Render insights for a single keyword."""
-    st.markdown("## 📊 Keyword Insights")
+    st.markdown("## Keyword Insights")
     st.markdown(f"Detailed analysis for **{keyword}** keyword")
     st.markdown("---")
 
@@ -52,7 +51,7 @@ def render_single_keyword_insights(keyword: str):
         insights_data = data_service.get_keyword_insights([keyword], days)
 
         if not insights_data:
-            st.warning("⚠️ No insights data available for this keyword.")
+            st.warning("No insights data available for this keyword.")
             return
 
         col1, col2 = st.columns(2, gap="large")
@@ -74,7 +73,7 @@ def render_single_keyword_insights(keyword: str):
 
 def render_multi_keyword_insights(keywords: List[str]):
     """Render comparative insights for multiple keywords."""
-    st.markdown("## 📊 Multi-Keyword Insights")
+    st.markdown("## Multi-Keyword Insights")
     st.markdown(
         f"Comparative analysis for {len(keywords)} keywords: {', '.join(keywords)}"
     )
@@ -90,7 +89,7 @@ def render_multi_keyword_insights(keywords: List[str]):
         insights_data = data_service.get_keyword_insights(keywords, days)
 
         if not insights_data:
-            st.warning("⚠️ No insights data available for these keywords.")
+            st.warning("No insights data available for these keywords.")
             return
 
         col1, col2 = st.columns(2, gap="large")
@@ -118,7 +117,7 @@ def render_multi_keyword_insights(keywords: List[str]):
 
 def render_platform_insights():
     """Render platform-wide insights."""
-    st.markdown("## 📊 Platform Insights")
+    st.markdown("## Platform Insights")
     st.markdown("Overall platform performance and trends")
     st.markdown("---")
 
@@ -132,7 +131,7 @@ def render_platform_insights():
         insights_data = data_service.get_keyword_insights(None, days)
 
         if not insights_data:
-            st.warning("⚠️ No platform insights data available.")
+            st.warning("No platform insights data available.")
             return
 
         col1, col2 = st.columns(2, gap="large")
@@ -157,7 +156,6 @@ def render_trend_analysis_card(trend_data: Dict[str, Any]):
     current_sentiment = trend_data.get("current_sentiment", 0)
     sentiment_change = trend_data.get("sentiment_change", 0)
 
-    trend_icon = get_trend_icon(sentiment_change)
     if sentiment_change > 2:
         trend_direction = "Improving"
     elif sentiment_change < -2:
@@ -171,7 +169,7 @@ def render_trend_analysis_card(trend_data: Dict[str, Any]):
     card_html = f"""
     <div class="metric-card metric-card-insights">
         <div class="metric-header">
-            <span class="metric-title">{trend_icon} Sentiment Score</span>
+            <span class="metric-title">Sentiment Score</span>
             <div class="metric-help-container"><span class="metric-help">?</span><div class="metric-tooltip">Shows how positive people feel about this keyword. Higher numbers mean more positive posts. The trend shows if sentiment is getting better or worse over time.</div></div>
         </div>
         <div class="metric-value">{current_sentiment:.1f}%</div>
@@ -200,7 +198,7 @@ def render_volume_stats_card(volume_data: Dict[str, Any]):
     card_html = f"""
     <div class="metric-card metric-card-insights">
         <div class="metric-header">
-            <span class="metric-title">📊 Volume Statistics</span>
+            <span class="metric-title">Volume Statistics</span>
             <div class="metric-help-container"><span class="metric-help">?</span><div class="metric-tooltip">Shows how many posts mention this keyword and how it ranks compared to other keywords. Higher ranks mean more people are talking about this topic.</div></div>
         </div>
         <div class="metric-value">{total_posts:,} posts</div>
@@ -225,7 +223,7 @@ def render_performance_metrics_card(performance_data: Dict[str, Any]):
     card_html = f"""
     <div class="metric-card metric-card-insights">
         <div class="metric-header">
-            <span class="metric-title">⭐ Model Performance</span>
+            <span class="metric-title">Model Performance</span>
             <div class="metric-help-container"><span class="metric-help">?</span><div class="metric-tooltip">Shows how confident our AI is about the sentiment scores. Higher numbers mean the AI is more sure about whether posts are positive or negative.</div></div>
         </div>
         <div class="metric-value">{avg_confidence:.1f}%</div>
@@ -252,7 +250,7 @@ def render_activity_patterns_card(activity_data: Dict[str, Any]):
     card_html = f"""
     <div class="metric-card metric-card-insights">
         <div class="metric-header">
-            <span class="metric-title">⏰ Activity Patterns</span>
+            <span class="metric-title">Activity Patterns</span>
             <div class="metric-help-container"><span class="metric-help">?</span><div class="metric-tooltip">Shows when people post most about this keyword. These are the best times to engage with your audience or monitor discussions.</div></div>
         </div>
         <div class="metric-value">{peak_text}</div>
@@ -270,7 +268,7 @@ def render_comparison_trend_card(trend_data: Dict[str, Any], keywords: List[str]
     card_html = f"""
     <div class="metric-card metric-card-insights">
         <div class="metric-header">
-            <span class="metric-title">📈 Trend Comparison</span>
+            <span class="metric-title">Trend Comparison</span>
             <div class="metric-help-container"><span class="metric-help">?</span><div class="metric-tooltip">Compare sentiment trends across multiple keywords. This helps you see which topics are performing better and identify patterns between related keywords.</div></div>
         </div>
         <div class="metric-value">{trend_data.get('selected_count', 0)} keywords</div>
@@ -288,7 +286,7 @@ def render_comparison_volume_card(volume_data: Dict[str, Any], keywords: List[st
     card_html = f"""
     <div class="metric-card metric-card-insights">
         <div class="metric-header">
-            <span class="metric-title">📊 Volume Comparison</span>
+            <span class="metric-title">Volume Comparison</span>
             <div class="metric-help-container"><span class="metric-help">?</span><div class="metric-tooltip">Compare post volumes across your selected keywords. This shows which topics generate the most discussion and helps you prioritize your focus.</div></div>
         </div>
         <div class="metric-value">{volume_data.get('total_posts', 0):,} posts</div>
