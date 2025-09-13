@@ -866,7 +866,7 @@ class DatabaseOperations:
         total_keywords = len(keyword_counts)
         keyword_rank = 0
 
-        for i, (kw, count) in enumerate(keyword_counts, 1):
+        for i, (kw, _) in enumerate(keyword_counts, 1):
             if kw == keyword:
                 keyword_rank = i
                 break
@@ -1056,7 +1056,7 @@ class DatabaseOperations:
 
         keyword_rank = 1
         total_keywords = len(all_keywords_volume)
-        for i, (kw, count) in enumerate(all_keywords_volume, 1):
+        for i, (kw, _) in enumerate(all_keywords_volume, 1):
             if kw == keyword:
                 keyword_rank = i
                 break
@@ -1087,7 +1087,7 @@ class DatabaseOperations:
         )
 
         peak_hours = (
-            [f"{int(hour):02d}:00" for hour, count in hourly_activity]
+            [f"{int(hour):02d}:00" for hour, _ in hourly_activity]
             if hourly_activity
             else []
         )
@@ -1129,8 +1129,6 @@ class DatabaseOperations:
                 "analysis_period": f"{days} days",
             },
         }
-
-    
 
     def _get_platform_insights(self, session, days: int) -> Dict[str, Any]:
         """Get platform-wide insights when all keywords are selected."""
