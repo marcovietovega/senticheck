@@ -29,8 +29,6 @@ def render_insights_section(selected_keywords: Optional[List[str]]):
         render_platform_insights()
     elif len(selected_keywords) == 1:
         render_single_keyword_insights(selected_keywords[0])
-    elif len(selected_keywords) <= 3:
-        render_multi_keyword_insights(selected_keywords)
     else:
         render_platform_insights()
 
@@ -71,48 +69,6 @@ def render_single_keyword_insights(keyword: str):
         st.error(f"Error loading insights for {keyword}: {e}")
 
 
-def render_multi_keyword_insights(keywords: List[str]):
-    """Render comparative insights for multiple keywords."""
-    st.markdown("## Multi-Keyword Insights")
-    st.markdown(
-        f"Comparative analysis for {len(keywords)} keywords: {', '.join(keywords)}"
-    )
-    st.markdown("---")
-
-    try:
-        data_service = get_dashboard_data_service()
-
-        time_range = st.session_state.get("time_range_selector", "7 days")
-        days_map = {"7 days": 7, "15 days": 15, "30 days": 30}
-        days = days_map.get(time_range, 7)
-
-        insights_data = data_service.get_keyword_insights(keywords, days)
-
-        if not insights_data:
-            st.warning("No insights data available for these keywords.")
-            return
-
-        col1, col2 = st.columns(2, gap="large")
-
-        with col1:
-            render_comparison_trend_card(
-                insights_data.get("trend_analysis", {}), keywords
-            )
-            render_comparison_volume_card(
-                insights_data.get("volume_stats", {}), keywords
-            )
-
-        with col2:
-            render_comparison_performance_card(
-                insights_data.get("performance_metrics", {}), keywords
-            )
-            render_comparison_activity_card(
-                insights_data.get("activity_patterns", {}), keywords
-            )
-
-    except Exception as e:
-        logger.error(f"Error rendering multi keyword insights: {e}")
-        st.error(f"Error loading comparative insights: {e}")
 
 
 def render_platform_insights():
@@ -263,78 +219,12 @@ def render_activity_patterns_card(activity_data: Dict[str, Any]):
     st.markdown(card_html, unsafe_allow_html=True)
 
 
-def render_comparison_trend_card(trend_data: Dict[str, Any], keywords: List[str]):
-    """Render trend comparison card for multiple keywords."""
-    card_html = f"""
-    <div class="metric-card metric-card-insights">
-        <div class="metric-header">
-            <span class="metric-title">Trend Comparison</span>
-            <div class="metric-help-container"><span class="metric-help">?</span><div class="metric-tooltip">Compare sentiment trends across multiple keywords. This helps you see which topics are performing better and identify patterns between related keywords.</div></div>
-        </div>
-        <div class="metric-value">{trend_data.get('selected_count', 0)} keywords</div>
-        <div class="metric-delta">Selected for comparison</div>
-        <div class="insight-card-details">
-            🔍 Keywords: {', '.join(keywords[:2])}{'...' if len(keywords) > 2 else ''}
-        </div>
-    </div>
-    """
-    st.markdown(card_html, unsafe_allow_html=True)
 
 
-def render_comparison_volume_card(volume_data: Dict[str, Any], keywords: List[str]):
-    """Render volume comparison card for multiple keywords."""
-    card_html = f"""
-    <div class="metric-card metric-card-insights">
-        <div class="metric-header">
-            <span class="metric-title">Volume Comparison</span>
-            <div class="metric-help-container"><span class="metric-help">?</span><div class="metric-tooltip">Compare post volumes across your selected keywords. This shows which topics generate the most discussion and helps you prioritize your focus.</div></div>
-        </div>
-        <div class="metric-value">{volume_data.get('total_posts', 0):,} posts</div>
-        <div class="metric-delta">Total across keywords</div>
-        <div class="insight-card-details">
-            🏆 Top: {volume_data.get('top_performer', 'N/A')} ({volume_data.get('top_posts', 0):,})
-        </div>
-    </div>
-    """
-    st.markdown(card_html, unsafe_allow_html=True)
 
 
-def render_comparison_performance_card(
-    performance_data: Dict[str, Any], keywords: List[str]
-):
-    """Render performance comparison card for multiple keywords."""
-    card_html = f"""
-    <div class="metric-card metric-card-insights">
-        <div class="metric-header">
-            <span class="metric-title">⭐ Performance Comparison</span>
-            <div class="metric-help-container"><span class="metric-help">?</span><div class="metric-tooltip">Compare sentiment performance across your selected keywords. This shows which topics have the most positive reception and helps identify your strongest areas.</div></div>
-        </div>
-        <div class="metric-value">{performance_data.get('avg_sentiment', 0):.1f}%</div>
-        <div class="metric-delta">Average sentiment</div>
-        <div class="insight-card-details">
-            🥇 Best: {performance_data.get('best_sentiment_keyword', 'N/A')} ({performance_data.get('best_sentiment_score', 0):.1f}%)
-        </div>
-    </div>
-    """
-    st.markdown(card_html, unsafe_allow_html=True)
 
 
-def render_comparison_activity_card(activity_data: Dict[str, Any], keywords: List[str]):
-    """Render activity comparison card for multiple keywords."""
-    card_html = f"""
-    <div class="metric-card metric-card-insights">
-        <div class="metric-header">
-            <span class="metric-title">⏰ Activity Overview</span>
-            <div class="metric-help-container"><span class="metric-help">?</span><div class="metric-tooltip">Shows activity patterns when analyzing multiple keywords together. This helps you understand the combined posting behavior across your selected topics.</div></div>
-        </div>
-        <div class="metric-value">{len(keywords)} keywords</div>
-        <div class="metric-delta">Analyzed together</div>
-        <div class="insight-card-details">
-            📊 Period: {activity_data.get('analysis_period', 'N/A')}
-        </div>
-    </div>
-    """
-    st.markdown(card_html, unsafe_allow_html=True)
 
 
 def render_platform_trend_card(trend_data: Dict[str, Any]):
