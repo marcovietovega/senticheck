@@ -323,49 +323,6 @@ class DashboardDataService:
                 "peak_date": None,
             }
 
-    def get_recent_posts(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get recent posts with sentiment analysis.
-
-        Args:
-            limit: Maximum number of posts to return
-
-        Returns:
-            List of post dictionaries with sentiment data
-        """
-        try:
-            # Get raw data from db_manager
-            raw_posts = self.db_manager.get_recent_posts_with_analysis(limit)
-
-            # Format the data for display (truncate text fields)
-            posts = []
-            for post in raw_posts:
-                posts.append(
-                    {
-                        "id": post["id"],
-                        "text": (
-                            post["text"][:200] + "..."
-                            if len(post["text"]) > 200
-                            else post["text"]
-                        ),
-                        "author": post["author"],
-                        "created_at": post["created_at"],
-                        "sentiment": post["sentiment"],
-                        "confidence": round(post["confidence"] * 100, 1),
-                        "cleaned_text": (
-                            post["cleaned_text"][:100] + "..."
-                            if len(post["cleaned_text"]) > 100
-                            else post["cleaned_text"]
-                        ),
-                    }
-                )
-
-            return posts
-
-        except Exception as e:
-            logger.error(f"Error getting recent posts: {e}")
-            return []
-
     def get_available_keywords(self) -> Dict[str, int]:
         """
         Get all available keywords from the database with their post counts.
@@ -544,6 +501,78 @@ class DashboardDataService:
                 "date_range": "",
             }
 
+    def get_wordcloud_stats(self, keyword: str, days: int = 30) -> Dict[str, Any]:
+        """
+        Get statistical insights for wordcloud analysis with sentiment-focused metrics.
+
+        Args:
+            keyword: The selected keyword
+            days: Number of days of historical data to analyze
+
+        Returns:
+            Dictionary with sentiment-focused statistical insights about the wordcloud
+        """
+        cache_key = f"wordcloud_stats_{keyword}_{days}"
+        cached_data = self._get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data
+
+        try:
+            wc_data = self.get_wordcloud_data([keyword], days)
+
+            if not wc_data["word_frequencies"]:
+                return None
+
+            word_frequencies = wc_data["word_frequencies"]
+            word_sentiments = wc_data["word_sentiments"]
+
+            sentiment_analysis = self._analyze_sentiment_words(
+                word_frequencies, word_sentiments
+            )
+
+            unique_words = len(word_frequencies)
+            total_posts = wc_data["total_posts"]
+
+            most_positive = sentiment_analysis["most_positive_word"]
+            most_negative = sentiment_analysis["most_negative_word"]
+            most_neutral = sentiment_analysis["most_neutral_word"]
+
+            result = {
+                "unique_words": unique_words,
+                "total_posts": total_posts,
+                "date_range": wc_data["date_range"],
+                "most_positive_word": most_positive[0] if most_positive else "None",
+                "positive_sentiment_score": (
+                    f"{most_positive[1]:.2f}" if most_positive else "0.00"
+                ),
+                "positive_frequency": most_positive[2] if most_positive else 0,
+                "most_negative_word": most_negative[0] if most_negative else "None",
+                "negative_sentiment_score": (
+                    f"{most_negative[1]:.2f}" if most_negative else "0.00"
+                ),
+                "negative_frequency": most_negative[2] if most_negative else 0,
+                "most_neutral_word": most_neutral[0] if most_neutral else "None",
+                "neutral_sentiment_score": (
+                    f"{most_neutral[1]:.2f}" if most_neutral else "0.50"
+                ),
+                "neutral_frequency": most_neutral[2] if most_neutral else 0,
+                "emotional_intensity": sentiment_analysis["emotional_intensity"],
+                "sentiment_ratio": sentiment_analysis["sentiment_ratio"],
+                "trending_positive": [
+                    word[0] for word in sentiment_analysis["trending_positive"]
+                ],
+                "trending_negative": [
+                    word[0] for word in sentiment_analysis["trending_negative"]
+                ],
+            }
+
+            self._set_cache_data(cache_key, result)
+            return result
+
+        except Exception as e:
+            logger.error(f"Error getting wordcloud stats for {keyword}: {e}")
+            return None
+
     def _process_text_for_wordcloud(self, text_data: List[Dict]) -> tuple:
         """
         Process text data to extract word frequencies and sentiment associations.
@@ -584,6 +613,73 @@ class DashboardDataService:
                 word_sentiments[word] = sum(sentiments) / len(sentiments)
 
         return word_frequencies, word_sentiments
+
+    def _analyze_sentiment_words(
+        self, word_frequencies: Dict[str, int], word_sentiments: Dict[str, float]
+    ) -> Dict[str, Any]:
+        """
+        Analyze words for sentiment insights and patterns.
+
+        Args:
+            word_frequencies: Dictionary of word frequencies
+            word_sentiments: Dictionary of word sentiment scores (0-1, where 0.5 is neutral)
+
+        Returns:
+            Dictionary with sentiment analysis insights
+        """
+        if not word_frequencies or not word_sentiments:
+            return {
+                "most_positive_word": None,
+                "most_negative_word": None,
+                "most_neutral_word": None,
+                "emotional_intensity": 0,
+                "sentiment_ratio": 0,
+                "trending_positive": [],
+                "trending_negative": [],
+            }
+
+        positive_words = []
+        negative_words = []
+        neutral_words = []
+
+        for word, sentiment in word_sentiments.items():
+            if word in word_frequencies:
+                freq = word_frequencies[word]
+                if sentiment > 0.6:
+                    positive_words.append((word, sentiment, freq))
+                elif sentiment < 0.4:
+                    negative_words.append((word, sentiment, freq))
+                else:
+                    distance_from_neutral = abs(sentiment - 0.5)
+                    neutral_words.append((word, sentiment, freq, distance_from_neutral))
+
+        positive_words.sort(key=lambda x: (x[1], x[2]), reverse=True)
+        negative_words.sort(key=lambda x: (1 - x[1], x[2]), reverse=True)
+        neutral_words.sort(key=lambda x: (x[3], -x[2]))
+
+        sentiment_distances = [abs(s - 0.5) for s in word_sentiments.values()]
+        emotional_intensity = (
+            sum(sentiment_distances) / len(sentiment_distances)
+            if sentiment_distances
+            else 0
+        )
+
+        positive_count = len(positive_words)
+        negative_count = len(negative_words)
+        total_sentiment_words = positive_count + negative_count
+        sentiment_ratio = (
+            positive_count / total_sentiment_words if total_sentiment_words > 0 else 0.5
+        )
+
+        return {
+            "most_positive_word": positive_words[0] if positive_words else None,
+            "most_negative_word": negative_words[0] if negative_words else None,
+            "most_neutral_word": neutral_words[0] if neutral_words else None,
+            "emotional_intensity": emotional_intensity,
+            "sentiment_ratio": sentiment_ratio,
+            "trending_positive": positive_words[:3],
+            "trending_negative": negative_words[:3],
+        }
 
 
 # Global data service instance
