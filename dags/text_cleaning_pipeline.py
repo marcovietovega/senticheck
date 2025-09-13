@@ -7,6 +7,7 @@ Cleans stored raw posts and prepares them for sentiment analysis.
 
 import os
 import sys
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any
 
@@ -21,6 +22,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from models.db_manager import SentiCheckDBManager
+
+logger = logging.getLogger(__name__)
 
 default_args = {
     "owner": "senticheck",
@@ -50,20 +53,20 @@ def check_database_connection(**context) -> Dict[str, Any]:
         Database statistics
     """
     try:
-        print("Checking database connection...")
+        logger.info("Checking database connection...")
 
         db_manager = SentiCheckDBManager()
 
         if not db_manager.test_connection():
             raise Exception("Database connection test failed")
 
-        print("Database connection successful")
+        logger.info("Database connection successful")
 
         # Get current statistics
         stats = db_manager.get_database_stats()
-        print(f"Database Statistics:")
+        logger.info("Database Statistics:")
         for key, value in stats.items():
-            print(f"  {key.replace('_', ' ').title()}: {value}")
+            logger.info("  %s: %s", key.replace('_', ' ').title(), value)
 
         return {
             "status": "success",
@@ -72,7 +75,7 @@ def check_database_connection(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"Error checking database connection: {str(e)}")
+        logger.error("Error checking database connection: %s", str(e))
         raise
 
 
@@ -83,21 +86,21 @@ def check_unprocessed_posts(**context) -> Dict[str, Any]:
         Unprocessed posts information
     """
     try:
-        print("Checking for unprocessed posts...")
+        logger.info("Checking for unprocessed posts...")
 
         db_manager = SentiCheckDBManager()
 
         # Get ALL unprocessed posts instead of using batch size
-        print("Getting all unprocessed posts from database...")
+        logger.info("Getting all unprocessed posts from database...")
         unprocessed_posts = db_manager.get_unprocessed_posts(
             limit=None
         )  # No limit = get all
         unprocessed_count = len(unprocessed_posts)
 
-        print(f"Found {unprocessed_count} total unprocessed posts to clean")
+        logger.info("Found %d total unprocessed posts to clean", unprocessed_count)
 
         if unprocessed_count == 0:
-            print("No posts to process - skipping cleaning pipeline")
+            logger.info("No posts to process - skipping cleaning pipeline")
             return {
                 "status": "success",
                 "unprocessed_count": 0,
@@ -107,10 +110,10 @@ def check_unprocessed_posts(**context) -> Dict[str, Any]:
 
         # Show sample of posts to be processed
         sample_size = min(3, unprocessed_count)
-        print(f"\nSample of posts to be processed (first {sample_size}):")
+        logger.info("Sample of posts to be processed (first %d):", sample_size)
         for i, post in enumerate(unprocessed_posts[:sample_size], 1):
             preview = post.text[:100] if post.text else "No text"
-            print(f"  [{i}] {post.author}: {preview}...")
+            logger.info("  [%d] %s: %s...", i, post.author, preview)
 
         return {
             "status": "success",
@@ -127,7 +130,7 @@ def check_unprocessed_posts(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"Error checking unprocessed posts: {str(e)}")
+        logger.error("Error checking unprocessed posts: %s", str(e))
         raise
 
 
@@ -142,11 +145,11 @@ def clean_posts(**context) -> Dict[str, Any]:
     check_result = context["ti"].xcom_pull(task_ids="check_unprocessed_posts")
 
     if check_result.get("unprocessed_count", 0) == 0:
-        print("No posts to clean - skipping")
+        logger.info("No posts to clean - skipping")
         return {"status": "success", "cleaned_count": 0, "message": "No posts to clean"}
 
     try:
-        print("Starting text cleaning pipeline...")
+        logger.info("Starting text cleaning pipeline...")
 
         db_manager = SentiCheckDBManager()
 
@@ -162,12 +165,12 @@ def clean_posts(**context) -> Dict[str, Any]:
         )
         min_content_words = int(Variable.get("min_content_words", default="3"))
 
-        print(f"Configuration:")
-        print(f"  Process ALL pending posts (no batch limit)")
-        print(f"  Preserve hashtags: {preserve_hashtags}")
-        print(f"  Preserve mentions: {preserve_mentions}")
-        print(f"  Filter hashtag-only posts: {filter_hashtag_only}")
-        print(f"  Minimum content words: {min_content_words}")
+        logger.info("Configuration:")
+        logger.info("  Process ALL pending posts (no batch limit)")
+        logger.info("  Preserve hashtags: %s", preserve_hashtags)
+        logger.info("  Preserve mentions: %s", preserve_mentions)
+        logger.info("  Filter hashtag-only posts: %s", filter_hashtag_only)
+        logger.info("  Minimum content words: %d", min_content_words)
 
         # Process ALL posts (no limit)
         processed_count = db_manager.process_raw_posts_to_cleaned(
@@ -178,7 +181,7 @@ def clean_posts(**context) -> Dict[str, Any]:
             limit=None,  # Process ALL unprocessed posts
         )
 
-        print(f"Successfully cleaned {processed_count} posts")
+        logger.info("Successfully cleaned %d posts", processed_count)
 
         # Get updated statistics
         updated_stats = db_manager.get_database_stats()
@@ -195,7 +198,7 @@ def clean_posts(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"Error cleaning posts: {str(e)}")
+        logger.error("Error cleaning posts: %s", str(e))
         raise
 
 
@@ -207,7 +210,7 @@ def validate_cleaned_posts(**context) -> Dict[str, Any]:
         Dict with validation results
     """
     try:
-        print("Validating cleaned posts...")
+        logger.info("Validating cleaned posts...")
 
         db_manager = SentiCheckDBManager()
 
@@ -216,7 +219,7 @@ def validate_cleaned_posts(**context) -> Dict[str, Any]:
         cleaned_count = clean_result.get("cleaned_count", 0)
 
         if cleaned_count == 0:
-            print("No posts were cleaned - validation complete")
+            logger.info("No posts were cleaned - validation complete")
             return {
                 "status": "success",
                 "validated_count": 0,
@@ -233,7 +236,7 @@ def validate_cleaned_posts(**context) -> Dict[str, Any]:
             "issues": [],
         }
 
-        print(f"Validating {len(unanalyzed_posts)} cleaned posts...")
+        logger.info("Validating %d cleaned posts...", len(unanalyzed_posts))
 
         for post in unanalyzed_posts:
             if not post.cleaned_text or not post.cleaned_text.strip():
@@ -245,23 +248,23 @@ def validate_cleaned_posts(**context) -> Dict[str, Any]:
                 validation_results["valid_posts"] += 1
 
         # Show validation summary
-        print(f"Validation Results:")
-        print(f"  Valid posts: {validation_results['valid_posts']}")
-        print(f"  Empty posts: {validation_results['empty_posts']}")
+        logger.info("Validation Results:")
+        logger.info("  Valid posts: %d", validation_results["valid_posts"])
+        logger.info("  Empty posts: %d", validation_results["empty_posts"])
 
         if validation_results["issues"]:
-            print(f"  Issues found: {len(validation_results['issues'])}")
+            logger.info("  Issues found: %d", len(validation_results["issues"]))
             for issue in validation_results["issues"][:3]:  # Show first 3 issues
-                print(f"    - {issue}")
+                logger.info("    - %s", issue)
 
         # Show sample of cleaned text
         if unanalyzed_posts:
-            print(f"\nSample cleaned posts:")
+            logger.info("Sample cleaned posts:")
             for i, post in enumerate(unanalyzed_posts[:3], 1):
                 cleaned_preview = (
                     post.cleaned_text[:80] if post.cleaned_text else "No text"
                 )
-                print(f"  [{i}] {cleaned_preview}...")
+                logger.info("  [%d] %s...", i, cleaned_preview)
 
         success = validation_results["valid_posts"] > 0
 
@@ -274,7 +277,7 @@ def validate_cleaned_posts(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"Error validating cleaned posts: {str(e)}")
+        logger.error("Error validating cleaned posts: %s", str(e))
         raise
 
 
