@@ -23,19 +23,8 @@ def render_sentiment_over_time_chart():
     else:
         st.markdown("Sentiment trends and patterns for all keywords")
 
-    col1, col2 = st.columns([3, 1])
-
-    with col2:
-        time_range = st.selectbox(
-            "Time range:",
-            options=["7 days", "15 days", "30 days"],
-            index=0,
-            key="time_range_selector",
-        )
-
     try:
-        days_map = {"7 days": 7, "15 days": 15, "30 days": 30}
-        days = days_map[time_range]
+        days = st.session_state.get("time_range_days", 7)
 
         chart_template = create_chart_template(selected_keywords)
         fig = chart_template.render_sentiment_trends(days=days)
