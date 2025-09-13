@@ -225,5 +225,3 @@ def analyze_sentiment_batch(
     except Exception as e:
         logger.error(f"Batch sentiment analysis failed: {e}")
         return []
-
-
