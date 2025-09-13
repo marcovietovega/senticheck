@@ -955,9 +955,7 @@ class DatabaseOperations:
                         session, selected_keywords[0], days
                     )
                 else:
-                    return self._get_multi_keyword_insights(
-                        session, selected_keywords, days
-                    )
+                    return self._get_platform_insights(session, days)
 
         except Exception as e:
             logger.error(f"Error getting keyword insights: {e}")
@@ -1132,68 +1130,7 @@ class DatabaseOperations:
             },
         }
 
-    def _get_multi_keyword_insights(
-        self, session, keywords: List[str], days: int
-    ) -> Dict[str, Any]:
-        """Get comparative insights for multiple keywords."""
-
-        end_date = datetime.now(timezone.utc).date()
-        start_date = end_date - timedelta(days=days)
-
-        keyword_data = {}
-        for keyword in keywords:
-            posts_count = (
-                session.query(func.count(SentimentAnalysis.id))
-                .filter(
-                    SentimentAnalysis.search_keyword == keyword,
-                    func.date(SentimentAnalysis.analyzed_at) >= start_date,
-                )
-                .scalar()
-                or 0
-            )
-
-            avg_sentiment = (
-                session.query(func.avg(SentimentAnalysis.positive_score))
-                .filter(
-                    SentimentAnalysis.search_keyword == keyword,
-                    func.date(SentimentAnalysis.analyzed_at) >= start_date,
-                )
-                .scalar()
-                or 0.0
-            )
-
-            keyword_data[keyword] = {
-                "posts": posts_count,
-                "sentiment": round(avg_sentiment * 100, 1),
-            }
-
-        top_performer = max(keyword_data.items(), key=lambda x: x[1]["posts"])
-        best_sentiment = max(keyword_data.items(), key=lambda x: x[1]["sentiment"])
-
-        return {
-            "trend_analysis": {
-                "comparison_type": "multiple_keywords",
-                "selected_count": len(keywords),
-            },
-            "volume_stats": {
-                "top_performer": top_performer[0],
-                "top_posts": top_performer[1]["posts"],
-                "total_posts": sum(data["posts"] for data in keyword_data.values()),
-            },
-            "performance_metrics": {
-                "best_sentiment_keyword": best_sentiment[0],
-                "best_sentiment_score": best_sentiment[1]["sentiment"],
-                "avg_sentiment": round(
-                    sum(data["sentiment"] for data in keyword_data.values())
-                    / len(keywords),
-                    1,
-                ),
-            },
-            "activity_patterns": {
-                "keywords_analyzed": list(keywords),
-                "analysis_period": f"{days} days",
-            },
-        }
+    
 
     def _get_platform_insights(self, session, days: int) -> Dict[str, Any]:
         """Get platform-wide insights when all keywords are selected."""
