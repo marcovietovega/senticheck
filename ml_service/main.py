@@ -18,11 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 try:
-    import sys
-    import os
-
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from scripts.sentiment_analyzer import SentimentAnalyzer
+    from .sentiment_analyzer import SentimentAnalyzer
 except ImportError as e:
     logger.error(f"Failed to import SentimentAnalyzer: {e}")
     SentimentAnalyzer = None
