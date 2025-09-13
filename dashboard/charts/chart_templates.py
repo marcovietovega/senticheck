@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""
-Chart Template Framework for SentiCheck Dashboard
-
-This module provides reusable chart templates that work with individual keywords.
-All charts maintain consistent styling while displaying keyword-specific data.
-"""
 
 import plotly.graph_objects as go
 import sys
@@ -41,7 +35,7 @@ class ChartTemplate:
         self.colors = {
             "positive": "#10b981",
             "negative": "#ef4444",
-            "neutral": "#6b7280",
+            "neutral": "#197bd6",
             "primary": "#3b82f6",
             "secondary": "#6b7280",
         }
@@ -287,9 +281,8 @@ class ChartTemplate:
             if not wc_data["word_frequencies"]:
                 return None
 
-            def sentiment_color_function(
-                word, _font_size, _position, _orientation, **_kwargs
-            ):
+            def sentiment_color_function(word, *args, **kwargs):
+                """Color function that works with different WordCloud versions."""
                 sentiment = wc_data["word_sentiments"].get(word, 0.5)
 
                 if sentiment > 0.6:
@@ -302,27 +295,21 @@ class ChartTemplate:
                     return "rgb(25, 118, 210)"
 
             wordcloud = WordCloud(
-                width=400,
-                height=200,
+                width=800,
+                height=400,
                 background_color="white",
                 max_words=50,
                 color_func=sentiment_color_function,
-                prefer_horizontal=0.85,
+                relative_scaling=0.5,
                 min_font_size=12,
-                max_font_size=28,
-                relative_scaling=0.4,
-                random_state=42,
-                margin=8,
+                max_font_size=80,
+                prefer_horizontal=0.9,
+                scale=2,
                 collocations=False,
-                scale=3,
-                mode="RGBA",
             ).generate_from_frequencies(wc_data["word_frequencies"])
 
             return wordcloud.to_image()
 
-        except ImportError as e:
-            logger.error(f"WordCloud library not installed: {e}")
-            return None
         except Exception as e:
             logger.error(f"Error generating word cloud: {e}")
             return None
