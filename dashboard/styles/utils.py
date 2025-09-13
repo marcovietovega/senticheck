@@ -1,8 +1,3 @@
-"""
-Style utility functions for the SentiCheck dashboard.
-Contains helper functions for dynamic styling and CSS generation.
-"""
-
 from .base import COLORS
 
 
