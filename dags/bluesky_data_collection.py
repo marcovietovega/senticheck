@@ -7,6 +7,7 @@ Runs every 30 minutes to collect fresh posts for sentiment analysis.
 
 import os
 import sys
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any
 
@@ -22,6 +23,8 @@ if project_root not in sys.path:
 
 from connectors.bluesky.fetch_posts import BlueskyConnector
 from models.db_manager import SentiCheckDBManager
+
+logger = logging.getLogger(__name__)
 
 default_args = {
     "owner": "senticheck",
@@ -61,7 +64,7 @@ def check_environment(**context) -> Dict[str, Any]:
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {missing_vars}")
 
-    print("All required environment variables are set")
+    logger.info("All required environment variables are set")
     return {
         "status": "success",
         "checked_vars": required_vars,
@@ -90,23 +93,24 @@ def fetch_bluesky_posts(**context) -> Dict[str, Any]:
         else:
             keywords = keywords_var if isinstance(keywords_var, list) else [keywords_var]
 
-        print(f"Starting Bluesky data collection:")
-        print(
-            f"  - Execution date: {context.get('execution_date', datetime.now()).strftime('%Y-%m-%d %H:%M')}"
+        logger.info("Starting Bluesky data collection:")
+        logger.info(
+            "  - Execution date: %s",
+            context.get('execution_date', datetime.now()).strftime('%Y-%m-%d %H:%M')
         )
-        print(f"  - Keywords: {keywords}")
-        print(f"  - Mode: Recent posts")
+        logger.info("  - Keywords: %s", keywords)
+        logger.info("  - Mode: Recent posts")
 
         connector = BlueskyConnector()
         if not connector.connect():
             raise Exception("Failed to connect to Bluesky")
 
-        print("Connected to Bluesky successfully")
+        logger.info("Connected to Bluesky successfully")
 
         # Fetch posts for each keyword
         all_posts = []
         for keyword in keywords:
-            print(f"Fetching posts for keyword: '{keyword}'")
+            logger.info("Fetching posts for keyword: '%s'", keyword)
             
             posts = connector.fetch_posts(
                 keyword=keyword,
@@ -118,9 +122,9 @@ def fetch_bluesky_posts(**context) -> Dict[str, Any]:
                 post['search_keyword'] = keyword
             
             all_posts.extend(posts)
-            print(f"Fetched {len(posts)} posts for keyword '{keyword}'")
+            logger.info("Fetched %d posts for keyword '%s'", len(posts), keyword)
 
-        print(f"Total fetched {len(all_posts)} posts from Bluesky across {len(keywords)} keywords")
+        logger.info("Total fetched %d posts from Bluesky across %d keywords", len(all_posts), len(keywords))
 
         # Convert datetime objects to ISO strings
         for post in all_posts:
@@ -139,7 +143,7 @@ def fetch_bluesky_posts(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"Error fetching posts: {e}")
+        logger.error("Error fetching posts: %s", e)
         raise
 
 
@@ -153,15 +157,18 @@ def store_posts_in_database(**context) -> Dict[str, Any]:
     fetch_result = context["ti"].xcom_pull(task_ids="fetch_posts")
 
     if not fetch_result or not fetch_result.get("posts"):
-        print("No posts to store")
+        logger.info("No posts to store")
         return {"status": "success", "stored_count": 0, "message": "No posts to store"}
 
     posts = fetch_result["posts"]
     date_info = fetch_result.get("date_range", {})
     keywords_used = fetch_result.get("keywords_used", ["AI"])
 
-    print(
-        f"Storing {len(posts)} posts from {date_info.get('date_str', 'recent collection')} in database (keywords: {keywords_used})"
+    logger.info(
+        "Storing %d posts from %s in database (keywords: %s)",
+        len(posts),
+        date_info.get('date_str', 'recent collection'),
+        keywords_used
     )
 
     try:
@@ -170,7 +177,7 @@ def store_posts_in_database(**context) -> Dict[str, Any]:
         # Posts already have search_keyword in each post
         stored_count = db_manager.store_raw_posts(posts)
 
-        print(f"Successfully stored {stored_count} posts in database")
+        logger.info("Successfully stored %d posts in database", stored_count)
 
         return {
             "status": "success",
@@ -183,7 +190,7 @@ def store_posts_in_database(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"Error storing posts in database: {str(e)}")
+        logger.error("Error storing posts in database: %s", str(e))
         raise
 
 
@@ -194,12 +201,12 @@ def setup_database(**context) -> Dict[str, Any]:
         Dict with setup results
     """
     try:
-        print("Setting up database schema and tables...")
+        logger.info("Setting up database schema and tables...")
 
         db_manager = SentiCheckDBManager()
         db_manager.create_tables()
 
-        print("Database setup completed successfully")
+        logger.info("Database setup completed successfully")
 
         return {
             "status": "success",
@@ -207,7 +214,7 @@ def setup_database(**context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"Error setting up database: {str(e)}")
+        logger.error("Error setting up database: %s", str(e))
         raise
 
 
