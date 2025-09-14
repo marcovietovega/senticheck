@@ -147,7 +147,7 @@ class ChartTemplate:
             )
             return fig
 
-    def render_sentiment_distribution(self) -> go.Figure:
+    def render_sentiment_distribution(self, days: int) -> go.Figure:
         """
         Template for sentiment distribution pie chart.
 
@@ -156,7 +156,7 @@ class ChartTemplate:
         """
         try:
             distribution = self.data_service.get_sentiment_distribution(
-                selected_keyword=self.selected_keyword
+                selected_keyword=self.selected_keyword, days=days
             )
 
             sentiments = list(distribution.keys())
