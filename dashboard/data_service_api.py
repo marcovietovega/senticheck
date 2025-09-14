@@ -196,9 +196,7 @@ class DashboardDataServiceAPI:
                 keyword_data["confidence_score"] = keyword_data["avg_confidence"]
 
             try:
-                trends = self._api_call(
-                    "/data/sentiment/trends", params={"days": days}
-                )  # TODO: add days to endpoint
+                trends = self._api_call("/data/sentiment/trends")
                 for trend_field in [
                     "positive_trend",
                     "negative_trend",
