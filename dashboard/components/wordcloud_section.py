@@ -8,7 +8,7 @@ import logging
 
 from dashboard.charts.chart_templates import create_chart_template
 from dashboard.data_service_api import get_dashboard_data_service
-from dashboard.app import render_metric_card
+from dashboard.utils import render_metric_card
 
 import sys
 from pathlib import Path
