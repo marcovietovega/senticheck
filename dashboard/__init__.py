@@ -10,7 +10,7 @@ __version__ = "1.0.0"
 __author__ = "SentiCheck Team"
 
 from .config import DASHBOARD_CONFIG, SENTIMENT_LABELS
-from .data_service import get_dashboard_data_service
+from .data_service_api import get_dashboard_data_service
 
 __all__ = [
     "DASHBOARD_CONFIG",
