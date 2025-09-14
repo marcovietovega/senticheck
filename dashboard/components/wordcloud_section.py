@@ -1,14 +1,14 @@
 """
 Word cloud section component for the SentiCheck dashboard.
-Provides word frequency visualization with sentiment-based coloring for single keywords.
+Provides word frequency visualization with sentiment-based coloring.
 """
 
 import streamlit as st
-from typing import Optional, List
 import logging
 
 from dashboard.charts.chart_templates import create_chart_template
-from dashboard.data_service import get_dashboard_data_service
+from dashboard.data_service_api import get_dashboard_data_service
+from dashboard.app import render_metric_card
 
 import sys
 from pathlib import Path
@@ -18,29 +18,25 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 logger = logging.getLogger(__name__)
 
 
-def render_wordcloud_section(selected_keywords: Optional[List[str]]):
+def render_wordcloud_section(selected_keyword: str, days: int = 30):
     """
-    Render the word cloud section (only for single keyword selection).
+    Render the word cloud section.
 
     Args:
-        selected_keywords: List of selected keywords
+        selected_keyword: The selected keyword
     """
-    if not selected_keywords or len(selected_keywords) != 1:
-        return
-
-    keyword = selected_keywords[0]
 
     try:
-        chart_template = create_chart_template(selected_keywords)
-        wordcloud_img = chart_template.render_wordcloud(days=30)
+        chart_template = create_chart_template(selected_keyword)
+        wordcloud_img = chart_template.render_wordcloud(days)
 
         if wordcloud_img:
-            st.markdown(f"### Word Analysis - {keyword}")
-            st.markdown(f"Most frequent words in **{keyword}** discussions")
+            st.markdown(f"### Word Analysis - {selected_keyword}")
+            st.markdown(f"Most frequent words in **{selected_keyword}** discussions")
             st.image(wordcloud_img, use_container_width=True)
-            render_wordcloud_stats(keyword)
+            render_wordcloud_stats(selected_keyword, days)
         else:
-            st.markdown(f"### Word Analysis - {keyword}")
+            st.markdown(f"### Word Analysis - {selected_keyword}")
             st.info(
                 "No text data available for word cloud generation. Please check if there are posts for this keyword."
             )
@@ -50,18 +46,17 @@ def render_wordcloud_section(selected_keywords: Optional[List[str]]):
         st.error(f"Error loading word cloud: {str(e)}")
 
 
-def render_wordcloud_stats(keyword: str):
+def render_wordcloud_stats(keyword: str, days: int = 30):
     """
     Render statistical insights for the word cloud with sentiment-focused metrics.
 
     Args:
         keyword: The selected keyword
     """
-    from dashboard.app import render_metric_card
 
     try:
         data_service = get_dashboard_data_service()
-        wordcloud_stats = data_service.get_wordcloud_stats(keyword, days=30)
+        wordcloud_stats = data_service.get_wordcloud_stats(keyword, days)
 
         if not wordcloud_stats:
             st.info("No statistical data available for word analysis.")
