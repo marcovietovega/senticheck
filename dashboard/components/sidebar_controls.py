@@ -110,10 +110,3 @@ def update_session_state_from_sidebar(sidebar_data: Dict[str, Any]) -> None:
     """
     st.session_state["selected_keyword"] = sidebar_data["selected_keyword"]
     st.session_state["time_range_days"] = sidebar_data["time_range_days"]
-
-    if "selected_keywords" in st.session_state:
-        del st.session_state["selected_keywords"]
-    if "time_range_selector" in st.session_state:
-        del st.session_state["time_range_selector"]
-    if "volume_time_range_selector" in st.session_state:
-        del st.session_state["volume_time_range_selector"]
