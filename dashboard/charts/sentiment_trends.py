@@ -10,7 +10,7 @@ sys.path.insert(0, str(parent_dir))
 from dashboard.charts.chart_templates import create_chart_template
 
 
-def render_sentiment_over_time_chart(keyword: str):
+def render_sentiment_over_time_chart(keyword: str, days: int = 30):
     """Render the sentiment over time."""
     st.markdown("## Sentiment Analysis")
     st.markdown("---")
@@ -18,7 +18,6 @@ def render_sentiment_over_time_chart(keyword: str):
     st.markdown("Sentiment trends and patterns for the selected keyword")
 
     try:
-        days = st.session_state.get("time_range_days", 7)
 
         chart_template = create_chart_template(keyword)
         fig = chart_template.render_sentiment_trends(days=days)
