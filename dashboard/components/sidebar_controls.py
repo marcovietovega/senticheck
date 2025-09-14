@@ -2,7 +2,7 @@ import streamlit as st
 from typing import Dict, Any
 import logging
 
-from dashboard.data_service import get_dashboard_data_service
+from dashboard.data_service_api import get_dashboard_data_service
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +40,11 @@ def render_sidebar_controls() -> Dict[str, Any]:
                 st.warning("No keywords found in database.")
                 return {"selected_keyword": "AI", "time_range_days": selected_days}
 
-            available_keywords = list(keywords_data.keys())
+            available_keywords = [item["keyword"] for item in keywords_data]
+            keyword_counts = {item["keyword"]: item["count"] for item in keywords_data}
 
             def format_keyword_with_count(keyword: str) -> str:
-                total_count = keywords_data.get(keyword, 0)
+                total_count = keyword_counts.get(keyword, 0)
                 return f"{keyword} ({total_count:,} posts)"
 
             selected_keyword = st.radio(
@@ -59,7 +60,7 @@ def render_sidebar_controls() -> Dict[str, Any]:
             st.markdown("## Quick Stats")
 
             if selected_keyword:
-                posts_in_range = keywords_data.get(selected_keyword, 0)
+                posts_in_range = keyword_counts.get(selected_keyword, 0)
 
                 st.markdown(f"**Range**: {time_range}")
                 st.markdown(f"**Keyword**: {selected_keyword}")
@@ -68,7 +69,7 @@ def render_sidebar_controls() -> Dict[str, Any]:
                 total_keywords = len(available_keywords)
                 keyword_rank = (
                     sorted(
-                        keywords_data.items(), key=lambda x: x[1], reverse=True
+                        keyword_counts.items(), key=lambda x: x[1], reverse=True
                     ).index((selected_keyword, posts_in_range))
                     + 1
                 )
