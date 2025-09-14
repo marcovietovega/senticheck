@@ -4,32 +4,30 @@ import plotly.graph_objects as go
 import sys
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
+from wordcloud import WordCloud
+import pandas as pd
 
-try:
-    from wordcloud import WordCloud
-except ImportError:
-    WordCloud = None
 
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from dashboard.data_service import get_dashboard_data_service
+from dashboard.data_service_api import get_dashboard_data_service
 
 logger = logging.getLogger(__name__)
 
 
 class ChartTemplate:
-    """Template class for creating consistent charts across different keywords."""
+    """Template class for creating consistent charts."""
 
-    def __init__(self, selected_keywords: Optional[List[str]] = None):
+    def __init__(self, selected_keyword: str):
         """
-        Initialize chart template with selected keywords.
+        Initialize chart template with selected keyword.
 
         Args:
-            selected_keywords: List of keywords to filter data by, None for all keywords
+            selected_keyword: Keyword to filter data by
         """
-        self.selected_keywords = selected_keywords
+        self.selected_keyword = selected_keyword
         self.data_service = get_dashboard_data_service()
 
         self.colors = {
@@ -55,15 +53,8 @@ class ChartTemplate:
         }
 
     def _get_keyword_text(self) -> str:
-        """Get display text for selected keywords."""
-        if not self.selected_keywords:
-            return "All Keywords"
-        elif len(self.selected_keywords) == 1:
-            return self.selected_keywords[0]
-        elif len(self.selected_keywords) <= 3:
-            return ", ".join(self.selected_keywords)
-        else:
-            return f"{len(self.selected_keywords)} Keywords"
+        """Get display text for selected keyword."""
+        return self.selected_keyword
 
     def render_sentiment_trends(self, days: int = 7) -> go.Figure:
         """
@@ -77,8 +68,25 @@ class ChartTemplate:
         """
         try:
             chart_data = self.data_service.get_sentiment_over_time(
-                days=days, selected_keywords=self.selected_keywords
+                days=days, selected_keyword=self.selected_keyword
             )
+
+            if isinstance(chart_data, list):
+                chart_data = pd.DataFrame(chart_data)
+            elif not isinstance(chart_data, pd.DataFrame):
+                chart_data = pd.DataFrame(
+                    columns=["date", "positive", "negative", "neutral"]
+                )
+
+            if chart_data.empty:
+                fig = go.Figure()
+                fig.update_layout(
+                    title=f"No data available for sentiment trends",
+                    **self.layout_defaults,
+                )
+                return fig
+
+            chart_data["date"] = pd.to_datetime(chart_data["date"])
 
             fig = go.Figure()
 
@@ -103,10 +111,9 @@ class ChartTemplate:
                         )
                     )
 
-            keyword_text = self._get_keyword_text()
             fig.update_layout(
                 **self.layout_defaults,
-                title=f"{keyword_text} Sentiment Trends - Last {days} days",
+                title=f"{self.selected_keyword} Sentiment Trends - Last {days} days",
                 xaxis_title="Date",
                 yaxis_title="Number of Posts",
                 legend=dict(
@@ -149,7 +156,7 @@ class ChartTemplate:
         """
         try:
             distribution = self.data_service.get_sentiment_distribution(
-                selected_keywords=self.selected_keywords
+                selected_keyword=self.selected_keyword
             )
 
             sentiments = list(distribution.keys())
@@ -173,10 +180,9 @@ class ChartTemplate:
                 ]
             )
 
-            keyword_text = self._get_keyword_text()
             fig.update_layout(
                 **self.layout_defaults,
-                title=f"{keyword_text} Sentiment Distribution",
+                title=f"{self.selected_keyword} Sentiment Distribution",
                 showlegend=True,
                 legend=dict(
                     orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.05
@@ -205,8 +211,25 @@ class ChartTemplate:
         """
         try:
             chart_data = self.data_service.get_sentiment_over_time(
-                days=days, selected_keywords=self.selected_keywords
+                days=days, selected_keyword=self.selected_keyword
             )
+
+            if isinstance(chart_data, list):
+                chart_data = pd.DataFrame(chart_data)
+            elif not isinstance(chart_data, pd.DataFrame):
+                chart_data = pd.DataFrame(
+                    columns=["date", "positive", "negative", "neutral"]
+                )
+
+            if chart_data.empty:
+                fig = go.Figure()
+                fig.update_layout(
+                    title=f"No data available for volume analysis",
+                    **self.layout_defaults,
+                )
+                return fig
+
+            chart_data["date"] = pd.to_datetime(chart_data["date"])
 
             chart_data["total_volume"] = chart_data[
                 ["positive", "negative", "neutral"]
@@ -229,10 +252,9 @@ class ChartTemplate:
                 )
             )
 
-            keyword_text = self._get_keyword_text()
             fig.update_layout(
                 **self.layout_defaults,
-                title=f"{keyword_text} Daily Volume - Last {days} days",
+                title=f"{self.selected_keyword} Daily Volume - Last {days} days",
                 xaxis_title="Date",
                 yaxis_title="Number of Posts",
                 showlegend=False,
@@ -260,7 +282,7 @@ class ChartTemplate:
 
     def render_wordcloud(self, days: int = 30) -> Optional[object]:
         """
-        Template for word cloud visualization (single keyword only).
+        Template for word cloud visualization.
 
         Args:
             days: Number of days of data to analyze
@@ -268,15 +290,12 @@ class ChartTemplate:
         Returns:
             PIL Image object for word cloud or None if invalid
         """
-        if not self.selected_keywords or len(self.selected_keywords) != 1:
-            return None
-
         try:
             if WordCloud is None:
                 logger.error("WordCloud library not installed")
                 return None
 
-            wc_data = self.data_service.get_wordcloud_data(self.selected_keywords, days)
+            wc_data = self.data_service.get_wordcloud_data(self.selected_keyword, days)
 
             if not wc_data["word_frequencies"]:
                 return None
@@ -316,15 +335,15 @@ class ChartTemplate:
 
 
 def create_chart_template(
-    selected_keywords: Optional[List[str]] = None,
+    selected_keyword: str,
 ) -> ChartTemplate:
     """
     Factory function to create a chart template instance.
 
     Args:
-        selected_keywords: List of keywords to filter charts by
+        selected_keyword: Keyword to filter charts by
 
     Returns:
-        ChartTemplate instance configured for the specified keywords
+        ChartTemplate instance configured
     """
-    return ChartTemplate(selected_keywords)
+    return ChartTemplate(selected_keyword)
