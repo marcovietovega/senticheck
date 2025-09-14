@@ -82,7 +82,7 @@ def render_metric_card(
     st.markdown(card_html, unsafe_allow_html=True)
 
 
-def render_kpi_section(selected_keyword: str):
+def render_kpi_section(selected_keyword: str, days: int = 30):
     """Render the KPI section with keyword-specific metrics."""
     try:
         st.header(f"Key Performance Indicators - {selected_keyword}")
@@ -90,7 +90,7 @@ def render_kpi_section(selected_keyword: str):
         st.markdown("---")
 
         data_service = get_dashboard_data_service()
-        kpi_data = data_service.get_kpi_metrics(keyword=selected_keyword, days=30)
+        kpi_data = data_service.get_kpi_metrics(keyword=selected_keyword, days=days)
 
         col1, col2, col3 = st.columns(3, gap="medium")
 
@@ -237,20 +237,20 @@ def render_kpi_section(selected_keyword: str):
         st.text(traceback.format_exc())
 
 
-def render_chart_section(selected_keyword: str):
+def render_chart_section(selected_keyword: str, days: int = 30):
     """Render the charts section."""
 
-    render_sentiment_over_time_chart(selected_keyword)
+    render_sentiment_over_time_chart(selected_keyword, days=days)
 
     col1, col2 = st.columns(2, gap="large")
 
     with col1:
-        render_sentiment_distribution_chart(selected_keyword)
+        render_sentiment_distribution_chart(selected_keyword, days=days)
 
     with col2:
-        render_volume_analysis_chart(selected_keyword)
+        render_volume_analysis_chart(selected_keyword, days=days)
 
-    render_wordcloud_section(selected_keyword)
+    render_wordcloud_section(selected_keyword, days=days)
 
 
 def main():
@@ -264,10 +264,11 @@ def main():
     update_session_state_from_sidebar(sidebar_data)
 
     selected_keyword = sidebar_data["selected_keyword"]
+    days = sidebar_data["time_range_days"]
 
-    render_kpi_section(selected_keyword)
+    render_kpi_section(selected_keyword, days)
 
-    render_chart_section(selected_keyword)
+    render_chart_section(selected_keyword, days)
 
 
 if __name__ == "__main__":
