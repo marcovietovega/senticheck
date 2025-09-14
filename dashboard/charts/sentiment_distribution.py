@@ -10,7 +10,7 @@ sys.path.insert(0, str(parent_dir))
 from dashboard.charts.chart_templates import create_chart_template
 
 
-def render_sentiment_distribution_chart(selected_keyword: str):
+def render_sentiment_distribution_chart(selected_keyword: str, days: int = 30):
     """Render the sentiment distribution chart"""
     st.markdown("## Sentiment Distribution")
     st.markdown("---")
@@ -19,7 +19,7 @@ def render_sentiment_distribution_chart(selected_keyword: str):
 
     try:
         chart_template = create_chart_template(selected_keyword)
-        fig = chart_template.render_sentiment_distribution()
+        fig = chart_template.render_sentiment_distribution(days)
 
         st.plotly_chart(fig, use_container_width=True)
 
