@@ -17,7 +17,6 @@ from dashboard.charts import (
 from dashboard.styles import apply_all_styles
 from dashboard.data_service_api import get_dashboard_data_service
 from dashboard.components import (
-    render_insights_section,
     render_sidebar_controls,
     update_session_state_from_sidebar,
 )
@@ -267,8 +266,6 @@ def main():
     selected_keyword = sidebar_data["selected_keyword"]
 
     render_kpi_section(selected_keyword)
-
-    render_insights_section(selected_keyword)
 
     render_chart_section(selected_keyword)
 
