@@ -10,7 +10,7 @@ sys.path.insert(0, str(parent_dir))
 from dashboard.charts.chart_templates import create_chart_template
 
 
-def render_volume_analysis_chart(selected_keyword: str):
+def render_volume_analysis_chart(selected_keyword: str, days: int = 30):
     """Render the volume analysis chart using template system."""
     st.markdown("## Volume Analysis")
     st.markdown("---")
@@ -18,10 +18,9 @@ def render_volume_analysis_chart(selected_keyword: str):
     st.markdown(f"Daily posting volume for {selected_keyword}")
 
     try:
-        days = st.session_state.get("time_range_days", 7)
 
         chart_template = create_chart_template(selected_keyword)
-        fig = chart_template.render_volume_analysis(days=days)
+        fig = chart_template.render_volume_analysis(days)
 
         st.plotly_chart(fig, use_container_width=True)
 
