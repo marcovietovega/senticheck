@@ -38,9 +38,6 @@ class DashboardDataServiceAPI:
     def _set_cache_data(self, cache_key: str, data: Any):
         self.cache[cache_key] = {"data": data, "timestamp": datetime.now()}
 
-    def clear_cache(self):
-        self.cache = {}
-
     def _api_call(
         self,
         endpoint: str,
@@ -65,20 +62,6 @@ class DashboardDataServiceAPI:
             logger.error(f"API call failed for {endpoint}: {e}")
             raise
 
-    def get_database_stats(self) -> Dict[str, Any]:
-        cache_key = "database_stats"
-        cached_data = self._get_cached_data(cache_key)
-        if cached_data:
-            return cached_data
-
-        try:
-            data = self._api_call("/data/stats")
-            self._set_cache_data(cache_key, data)
-            return data
-        except Exception as e:
-            logger.error(f"Error getting database stats: {e}")
-            return {}
-
     def get_sentiment_distribution(
         self, selected_keyword: str, days: int = 30
     ) -> Dict[str, Any]:
@@ -97,62 +80,6 @@ class DashboardDataServiceAPI:
         except Exception as e:
             logger.error(f"Error getting sentiment distribution: {e}")
             return {"positive": 0, "negative": 0, "neutral": 0}
-
-    def get_average_confidence(
-        self, search_keyword: str = None, days: int = 30
-    ) -> float:
-        try:
-            params = {"days": days}
-            if search_keyword:
-                params["search_keyword"] = search_keyword
-
-            data = self._api_call("/data/stats", params=params)
-            return data.get("average_confidence", 0.0)
-        except Exception as e:
-            logger.error(f"Error getting average confidence: {e}")
-            return 0.0
-
-    def get_posts_by_date(
-        self, date: datetime, search_keyword: str = None
-    ) -> List[Dict]:
-        try:
-            params = {"date": date.isoformat(), "search_keyword": search_keyword}
-            return self._api_call("/data/posts/by_date", params=params)
-        except Exception as e:
-            logger.error(f"Error getting posts by date: {e}")
-            return []
-
-    def get_today_posts_count(self, search_keyword: str = None) -> int:
-        try:
-            params = {}
-            if search_keyword:
-                params["search_keyword"] = search_keyword
-
-            data = self._api_call("/data/stats", params=params)
-            return data.get("today_posts", 0)
-        except Exception as e:
-            logger.error(f"Error getting today posts count: {e}")
-            return 0
-
-    def calculate_sentiment_trends(
-        self, search_keyword: str = None, days: int = 7
-    ) -> Dict[str, Any]:
-        cache_key = f"sentiment_trends_{search_keyword}_{days}"
-        cached_data = self._get_cached_data(cache_key)
-        if cached_data:
-            return cached_data
-
-        try:
-            params = {"days": days}
-            if search_keyword:
-                params["search_keyword"] = search_keyword
-
-            data = self._api_call("/data/sentiment/trends", params=params)
-            self._set_cache_data(cache_key, data)
-            return data
-        except Exception as e:
-            logger.error(f"Error calculating sentiment trends: {e}")
-            return {}
 
     def get_sentiment_over_time(self, days: int, selected_keyword: str) -> List[Dict]:
         cache_key = f"sentiment_over_time_{selected_keyword}_{days}"
