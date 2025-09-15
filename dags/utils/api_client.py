@@ -76,14 +76,6 @@ class SentiCheckAPIClient:
         except ValueError as e:
             raise APIError(f"Invalid JSON response from {endpoint}: {str(e)}")
 
-    def health_check(self) -> Dict[str, Any]:
-        """Check API service health status.
-
-        Returns:
-            Health status information
-        """
-        return self._make_request("get", "/health")
-
     def get_stats(self) -> Dict[str, Any]:
         """Get database statistics.
 
@@ -124,13 +116,11 @@ class SentiCheckAPIClient:
 
     def analyze_sentiment(
         self,
-        limit: int = 1000,
         model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest",
     ) -> Dict[str, Any]:
         """Analyze sentiment of cleaned posts.
 
         Args:
-            limit: Batch size limit
             model_name: Sentiment analysis model name
 
         Returns:
@@ -139,6 +129,6 @@ class SentiCheckAPIClient:
         return self._make_request(
             "post",
             "/pipeline/analyze_sentiment",
-            params={"limit": limit, "model_name": model_name},
+            params={"model_name": model_name},
             timeout=600,
         )
