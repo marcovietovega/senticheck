@@ -145,7 +145,8 @@ class DashboardDataServiceAPI:
             if "daily_trend" not in keyword_data:
                 try:
                     yesterday_posts = self._api_call(
-                        "/data/posts/by_date", params={"days": 2}
+                        "/data/posts/by_date",
+                        params={"search_keyword": keyword, "days": 2},
                     )
                     posts_data = list(yesterday_posts.values())
                     yesterday_count = posts_data[0] if len(posts_data) >= 2 else 0
@@ -200,7 +201,7 @@ class DashboardDataServiceAPI:
             return cached_data
 
         try:
-            data = self._api_call("/data/keywords", params={"days": days})
+            data = self._api_call("/data/keywords")
 
             if isinstance(data, list) and data and isinstance(data[0], list):
                 transformed_data = [
