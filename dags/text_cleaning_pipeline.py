@@ -17,6 +17,8 @@ from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOpe
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from utils.api_client import SentiCheckAPIClient, APIError
+
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +51,6 @@ def clean_posts(**context) -> Dict[str, Any]:
     Returns:
         Dict with cleaning results
     """
-    from utils.api_client import SentiCheckAPIClient, APIError
-
     try:
         logger.info("Starting text cleaning pipeline...")
         logger.info("Processing all unprocessed posts...")
