@@ -1,4 +1,5 @@
 from .base import COLORS
+from datetime import datetime
 
 
 def get_dynamic_color(value, thresholds=None):
@@ -121,8 +122,6 @@ def format_date_short(date_str):
     if not date_str or date_str == "N/A":
         return "N/A"
     try:
-        from datetime import datetime
-
         date_obj = datetime.strptime(str(date_str), "%Y-%m-%d")
         return date_obj.strftime("%b %d")
     except:
