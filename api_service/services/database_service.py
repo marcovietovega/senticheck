@@ -12,6 +12,8 @@ if project_root not in sys.path:
 
 from api_service.utils.text_cleaner import clean_bluesky_posts
 from api_service.models.database import RawPost
+from api_service.models.db_manager import get_db_manager
+from api_service.utils.sentiment_analyzer import SentimentAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +21,6 @@ logger = logging.getLogger(__name__)
 class DatabaseService:
 
     def __init__(self):
-        from api_service.models.db_manager import get_db_manager
-
         self.db_ops = get_db_manager()
 
     def get_database_stats(self) -> Dict[str, Any]:
@@ -109,14 +109,12 @@ class DatabaseService:
                 return 0
 
             try:
-                from api_service.utils.sentiment_analyzer import SentimentAnalyzer
-
                 analyzer = SentimentAnalyzer.get_cached_analyzer(model_name)
                 if not analyzer:
                     logger.error("Failed to get cached sentiment analyzer")
                     return 0
-            except ImportError as e:
-                logger.error(f"Failed to import SentimentAnalyzer: {e}")
+            except Exception as e:
+                logger.error(f"Failed to get sentiment analyzer: {e}")
                 return 0
 
             logger.info(f"Analyzing sentiment for {len(cleaned_posts)} posts...")
