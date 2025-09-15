@@ -271,5 +271,3 @@ def clean_bluesky_posts(
         filter_hashtag_only,
         min_content_words,
     )
-
-
