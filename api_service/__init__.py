@@ -1,8 +1,7 @@
 # ML Service package for SentiCheck sentiment analysis API
 
-from .utils.sentiment_analyzer import SentimentAnalyzer, analyze_sentiment_batch
+from .utils.sentiment_analyzer import SentimentAnalyzer
 
 __all__ = [
     "SentimentAnalyzer",
-    "analyze_sentiment_batch",
 ]
