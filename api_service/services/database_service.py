@@ -11,7 +11,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from api_service.utils.text_cleaner import clean_bluesky_posts
-from models.database import RawPost
+from api_service.models.database import RawPost
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class DatabaseService:
 
     def __init__(self):
-        from models.db_manager import get_db_manager
+        from api_service.models.db_manager import get_db_manager
 
         self.db_ops = get_db_manager()
 
@@ -109,7 +109,7 @@ class DatabaseService:
                 return 0
 
             try:
-                from api_service.sentiment_analyzer import SentimentAnalyzer
+                from api_service.utils.sentiment_analyzer import SentimentAnalyzer
 
                 analyzer = SentimentAnalyzer.get_cached_analyzer(model_name)
                 if not analyzer:
