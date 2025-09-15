@@ -13,8 +13,7 @@ from typing import Dict, Any
 
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
-from airflow.operators.trigger_dagrun import TriggerDagRunOperator
-
+from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOperator
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
