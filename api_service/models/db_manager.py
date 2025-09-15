@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 
 import logging
-from collections import defaultdict
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import func
 
 
 from .db_operations import get_db_operations
-from .database import RawPost, CleanedPost, SentimentAnalysis
+from .database import RawPost, CleanedPost
 
 
 logger = logging.getLogger(__name__)
@@ -176,75 +174,22 @@ class SentiCheckDBManager:
 
     def get_sentiment_over_time(
         self, search_keyword: str, days: int = 7
-    ) -> List[Dict[str, Any]]:  # TODO: move to db_operations
+    ) -> List[Dict[str, Any]]:
         """
         Get sentiment counts by date for time series analysis.
 
         Args:
+            search_keyword: Keyword to filter by
             days: Number of days of historical data to return
 
         Returns:
             List of dicts with date and sentiment counts
         """
-        try:
-            with self.db_ops.db_connection.get_session() as session:
-                end_date = datetime.now().date()
-                start_date = end_date - timedelta(days=days - 1)
-
-                all_records = (
-                    session.query(
-                        func.date(SentimentAnalysis.analyzed_at).label("date"),
-                        SentimentAnalysis.sentiment_label,
-                    )
-                    .filter(SentimentAnalysis.search_keyword == search_keyword)
-                    .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
-                    .all()
-                )
-
-                date_sentiment_counts = defaultdict(
-                    lambda: {"positive": 0, "negative": 0, "neutral": 0}
-                )
-
-                for record in all_records:
-                    date_sentiment_counts[record.date][record.sentiment_label] += 1
-
-                results = []
-                for date, counts in date_sentiment_counts.items():
-                    results.append(
-                        type(
-                            "Result",
-                            (),
-                            {
-                                "date": date,
-                                "positive": counts["positive"],
-                                "negative": counts["negative"],
-                                "neutral": counts["neutral"],
-                            },
-                        )
-                    )
-
-                    results.sort(key=lambda x: x.date)
-
-                data = []
-                for result in results:
-                    data.append(
-                        {
-                            "date": result.date,
-                            "positive": result.positive,
-                            "negative": result.negative,
-                            "neutral": result.neutral,
-                        }
-                    )
-
-                return data
-
-        except Exception as e:
-            logger.error(f"Error getting sentiment over time: {e}")
-            return []
+        return self.db_ops.get_sentiment_over_time(search_keyword, days)
 
     def get_sentiment_over_time_filtered(
         self, days: int = 7, selected_keywords: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:  # TODO: move to db_operations
+    ) -> List[Dict[str, Any]]:
         """
         Get sentiment counts by date for time series analysis, optionally filtered by keywords.
 
@@ -255,54 +200,7 @@ class SentiCheckDBManager:
         Returns:
             List of dicts with date and sentiment counts
         """
-        try:
-            with self.db_ops.db_connection.get_session() as session:
-                end_date = datetime.now().date()
-                start_date = end_date - timedelta(days=days - 1)
-
-                base_query = (
-                    session.query(
-                        func.date(SentimentAnalysis.analyzed_at).label("date"),
-                        SentimentAnalysis.sentiment_label,
-                        func.count(SentimentAnalysis.id).label("count"),
-                    )
-                    .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
-                    .filter(func.date(SentimentAnalysis.analyzed_at) <= end_date)
-                )
-
-                if selected_keywords is not None and selected_keywords:
-                    base_query = base_query.filter(
-                        SentimentAnalysis.search_keyword.in_(selected_keywords)
-                    )
-
-                results = base_query.group_by(
-                    func.date(SentimentAnalysis.analyzed_at),
-                    SentimentAnalysis.sentiment_label,
-                ).all()
-
-                data_dict = {}
-                for result in results:
-                    date_str = result.date.strftime("%Y-%m-%d")
-                    if date_str not in data_dict:
-                        data_dict[date_str] = {
-                            "date": date_str,
-                            "positive": 0,
-                            "negative": 0,
-                            "neutral": 0,
-                        }
-
-                    sentiment = result.sentiment_label.lower()
-                    if sentiment in ["positive", "negative", "neutral"]:
-                        data_dict[date_str][sentiment] = result.count
-
-                    data = list(data_dict.values())
-                data.sort(key=lambda x: x["date"])
-
-                return data
-
-        except Exception as e:
-            logger.error(f"Error getting filtered sentiment over time: {e}")
-            return []
+        return self.db_ops.get_sentiment_over_time_filtered(days, selected_keywords)
 
     def calculate_sentiment_trends(self) -> Dict[str, float]:
         """
