@@ -36,7 +36,6 @@ class DatabaseOperations:
             logger.info("No posts to store")
             return 0
 
-        # Try batch insert first
         try:
             return self._store_raw_posts_batch(posts_data)
         except Exception as e:
@@ -46,12 +45,19 @@ class DatabaseOperations:
             return self._store_raw_posts_individual(posts_data)
 
     def _store_raw_posts_batch(self, posts_data: List[Dict]) -> int:
-        """Batch insert posts using PostgreSQL ON CONFLICT DO NOTHING."""
+        """
+        Batch insert posts using PostgreSQL ON CONFLICT DO NOTHING.
+
+        Args:
+            posts_data: List of post dictionaries
+
+        Returns:
+                Number of posts stored (excluding duplicates)
+        """
 
         stored_count = 0
 
         with self.db_connection.get_session() as session:
-            # Prepare data for batch insert
             insert_data = []
             for post_data in posts_data:
                 insert_data.append(
@@ -69,7 +75,6 @@ class DatabaseOperations:
                     }
                 )
 
-            # Handle duplicates with ON CONFLICT
             stmt = insert(RawPost).values(insert_data)
             stmt = stmt.on_conflict_do_nothing(index_elements=["post_uri"])
 
@@ -82,14 +87,21 @@ class DatabaseOperations:
         return stored_count
 
     def _store_raw_posts_individual(self, posts_data: List[Dict]) -> int:
-        """Store posts individually with duplicate checking."""
+        """
+        Store posts individually with duplicate checking.
+
+        Args:
+            posts_data: List of post dictionaries
+
+        Returns:
+            Number of posts stored (excluding duplicates)
+        """
         stored_count = 0
         skipped_count = 0
 
         for post_data in posts_data:
             try:
                 with self.db_connection.get_session() as session:
-                    # Check if post exists
                     existing_post = (
                         session.query(RawPost)
                         .filter_by(post_uri=post_data.get("post_uri", ""))
@@ -103,7 +115,6 @@ class DatabaseOperations:
                         skipped_count += 1
                         continue
 
-                    # Create new post
                     raw_post = RawPost(
                         post_uri=post_data.get("post_uri", ""),
                         cid=post_data.get("cid", ""),
@@ -117,7 +128,6 @@ class DatabaseOperations:
                     )
 
                     session.add(raw_post)
-                    # Session commits when exiting context
                     stored_count += 1
 
             except Exception as e:
@@ -131,20 +141,15 @@ class DatabaseOperations:
         )
         return stored_count
 
-    def get_unprocessed_posts(self, limit: Optional[int] = 100) -> List[RawPost]:
+    def get_unprocessed_posts(self) -> List[RawPost]:
         """
         Get raw posts that haven't been cleaned yet.
-
-        Args:
-            limit: Maximum number of posts to return. If None, returns all unprocessed posts.
 
         Returns:
             List[RawPost]: List of unprocessed raw posts
         """
         with self.db_connection.get_session() as session:
             query = session.query(RawPost).filter_by(is_processed=False)
-            if limit is not None:
-                query = query.limit(limit)
             posts = query.all()
             session.expunge_all()
             return posts
@@ -154,6 +159,7 @@ class DatabaseOperations:
         raw_post_id: int,
         cleaned_text: str,
         original_text: str,
+        search_keyword: str,
         cleaning_metadata: Dict,
         preserve_hashtags: bool = False,
         preserve_mentions: bool = False,
@@ -165,6 +171,7 @@ class DatabaseOperations:
             raw_post_id: ID of the raw post
             cleaned_text: The cleaned text
             original_text: The original text
+            search_keyword: The keyword used to find the post
             cleaning_metadata: Metadata about the cleaning process
             preserve_hashtags: Whether hashtags were preserved
             preserve_mentions: Whether mentions were preserved
@@ -178,6 +185,7 @@ class DatabaseOperations:
                     raw_post_id=raw_post_id,
                     cleaned_text=cleaned_text,
                     original_text=original_text,
+                    search_keyword=search_keyword,
                     cleaning_metadata=cleaning_metadata,
                     preserve_hashtags=preserve_hashtags,
                     preserve_mentions=preserve_mentions,
@@ -199,20 +207,23 @@ class DatabaseOperations:
             logger.error(f"Failed to store cleaned post: {e}")
             return None
 
-    def get_unanalyzed_posts(self, limit: Optional[int] = 100) -> List[CleanedPost]:
+    def get_unanalyzed_posts(self, limit: int = 1000) -> List[CleanedPost]:
         """
         Get cleaned posts that haven't been analyzed for sentiment yet.
+        Optimized with proper indexing and ordering.
 
         Args:
-            limit: Maximum number of posts to return. If None, returns all unanalyzed posts.
+            limit: Maximum number of posts to retrieve
 
         Returns:
             List[CleanedPost]: List of unanalyzed cleaned posts
         """
         with self.db_connection.get_session() as session:
-            query = session.query(CleanedPost).filter_by(is_analyzed=False)
-            if limit is not None:
-                query = query.limit(limit)
+            query = (
+                session.query(CleanedPost)
+                .filter(CleanedPost.is_analyzed == False)
+                .limit(limit)
+            )
             posts = query.all()
 
             session.expunge_all()
@@ -248,7 +259,6 @@ class DatabaseOperations:
         """
         try:
             with self.db_connection.get_session() as session:
-                # Get search_keyword from raw_post if not provided
                 if search_keyword is None:
                     cleaned_post = (
                         session.query(CleanedPost).filter_by(id=cleaned_post_id).first()
@@ -309,7 +319,6 @@ class DatabaseOperations:
         with self.db_connection.get_session() as session:
             for result in sentiment_results:
                 try:
-                    # Get search_keyword from result or fetch from raw_post
                     search_keyword = result.get("search_keyword")
                     if search_keyword is None:
                         cleaned_post = (
@@ -387,32 +396,17 @@ class DatabaseOperations:
             logger.error(f"Failed to get database stats: {e}")
             return {}
 
-    def get_sentiment_distribution(self) -> List[Tuple[str, int]]:
+    def get_sentiment_distribution(
+        self, search_keyword: str = None, days: int = 30
+    ) -> List[Tuple[str, int]]:
         """Get sentiment distribution.
 
-        Returns:
-            List of tuples containing sentiment labels and their counts
-        """
-        with self.db_connection.get_session() as session:
-            result = (
-                session.query(
-                    SentimentAnalysis.sentiment_label,
-                    func.count(SentimentAnalysis.id).label("count"),
-                )
-                .group_by(SentimentAnalysis.sentiment_label)
-                .order_by(SentimentAnalysis.sentiment_label)
-                .all()
-            )
-            return [(row.sentiment_label, row.count) for row in result]
-
-    def get_sentiment_over_time(self, days: int) -> List[Dict[str, Any]]:
-        """Get sentiment over time.
-
         Args:
+            search_keyword: Keyword to filter posts
             days: Number of days to look back
 
         Returns:
-            List of dictionaries containing sentiment data over time
+            List of tuples containing sentiment labels and their counts
         """
         with self.db_connection.get_session() as session:
             end_date = datetime.now(timezone.utc).date()
@@ -420,36 +414,69 @@ class DatabaseOperations:
 
             result = (
                 session.query(
-                    func.date(SentimentAnalysis.analyzed_at).label("date"),
-                    func.count(
-                        func.case(
-                            [(SentimentAnalysis.sentiment_label == "positive", 1)]
-                        )
-                    ).label("positive"),
-                    func.count(
-                        func.case(
-                            [(SentimentAnalysis.sentiment_label == "negative", 1)]
-                        )
-                    ).label("negative"),
-                    func.count(
-                        func.case([(SentimentAnalysis.sentiment_label == "neutral", 1)])
-                    ).label("neutral"),
+                    SentimentAnalysis.sentiment_label,
+                    func.count(SentimentAnalysis.id).label("count"),
                 )
+                .filter(SentimentAnalysis.search_keyword == search_keyword)
                 .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
-                .group_by(func.date(SentimentAnalysis.analyzed_at))
-                .order_by(func.date(SentimentAnalysis.analyzed_at))
+                .group_by(SentimentAnalysis.sentiment_label)
+                .order_by(SentimentAnalysis.sentiment_label)
                 .all()
             )
+            return [(row.sentiment_label, row.count) for row in result]
 
-            return [
-                {
-                    "date": row.date,
-                    "positive": row.positive,
-                    "negative": row.negative,
-                    "neutral": row.neutral,
+    def calculate_sentiment_trends(self) -> Dict[str, float]:
+        """
+        Calculate sentiment trends compared to previous day .
+
+        Returns:
+            Dict with trend percentages for each sentiment
+        """
+        try:
+            today = datetime.now(timezone.utc).date()
+            yesterday = today - timedelta(days=1)
+
+            with self.db_connection.get_session() as session:
+                today_query = session.query(
+                    SentimentAnalysis.sentiment_label,
+                    func.count(SentimentAnalysis.id).label("count"),
+                ).filter(func.date(SentimentAnalysis.analyzed_at) == today)
+
+                yesterday_query = session.query(
+                    SentimentAnalysis.sentiment_label,
+                    func.count(SentimentAnalysis.id).label("count"),
+                ).filter(func.date(SentimentAnalysis.analyzed_at) == yesterday)
+
+                today_result = today_query.group_by(
+                    SentimentAnalysis.sentiment_label
+                ).all()
+                yesterday_result = yesterday_query.group_by(
+                    SentimentAnalysis.sentiment_label
+                ).all()
+
+                today_counts = {sentiment: count for sentiment, count in today_result}
+                yesterday_counts = {
+                    sentiment: count for sentiment, count in yesterday_result
                 }
-                for row in result
-            ]
+
+                trends = {}
+                for sentiment in ["positive", "negative", "neutral"]:
+                    today_count = today_counts.get(sentiment, 0)
+                    yesterday_count = yesterday_counts.get(sentiment, 0)
+
+                    if yesterday_count > 0:
+                        trend = (
+                            (today_count - yesterday_count) / yesterday_count
+                        ) * 100
+                        trends[f"{sentiment}_trend"] = round(trend, 1)
+                    else:
+                        trends[f"{sentiment}_trend"] = 0.0
+
+                return trends
+
+        except Exception as e:
+            logger.error(f"Error calculating sentiment trends: {e}")
+            return {"positive_trend": 0.0, "negative_trend": 0.0, "neutral_trend": 0.0}
 
     def get_average_confidence(self) -> float:
         """Get average confidence score.
@@ -479,10 +506,13 @@ class DatabaseOperations:
             )
             return int(result or 0)
 
-    def get_posts_by_date_range(self, days: int) -> List[Tuple[str, int]]:
+    def get_posts_by_date_range(
+        self, search_keyword: str, days: int
+    ) -> List[Tuple[str, int]]:
         """Get post counts by date for the last N days.
 
         Args:
+            search_keyword: Keyword to filter posts
             days: Number of days to look back
 
         Returns:
@@ -497,6 +527,7 @@ class DatabaseOperations:
                     func.date(SentimentAnalysis.analyzed_at).label("date"),
                     func.count(SentimentAnalysis.id).label("count"),
                 )
+                .filter(SentimentAnalysis.search_keyword == search_keyword)
                 .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
                 .group_by(func.date(SentimentAnalysis.analyzed_at))
                 .order_by(func.date(SentimentAnalysis.analyzed_at))
@@ -529,18 +560,22 @@ class DatabaseOperations:
             logger.error(f"Error getting keywords with counts: {e}")
             return []
 
-    def get_keyword_specific_metrics(self, keyword: str) -> Dict[str, Any]:
+    def get_keyword_specific_metrics(self, keyword: str, days: int) -> Dict[str, Any]:
         """
         Get sentiment metrics for a specific keyword.
 
         Args:
             keyword: The keyword to analyze
+            days: Number of days of historical data to consider
 
         Returns:
             Dictionary with keyword-specific metrics
         """
         try:
             with self.db_connection.get_session() as session:
+                end_date = datetime.now(timezone.utc).date()
+                start_date = end_date - timedelta(days=days)
+
                 sentiment_result = (
                     session.query(
                         SentimentAnalysis.sentiment_label,
@@ -548,6 +583,7 @@ class DatabaseOperations:
                         func.avg(SentimentAnalysis.confidence_score).label("avg_conf"),
                     )
                     .filter(SentimentAnalysis.search_keyword == keyword)
+                    .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
                     .group_by(SentimentAnalysis.sentiment_label)
                     .all()
                 )
@@ -596,99 +632,15 @@ class DatabaseOperations:
             logger.error(f"Error getting keyword metrics for {keyword}: {e}")
             return {}
 
-    def get_unified_kpi_metrics(
-        self, selected_keywords: Optional[List[str]] = None
+    def get_keyword_specific_kpis(
+        self, selected_keyword: str, days: int
     ) -> Dict[str, Any]:
-        """
-        Get unified KPI metrics using SentimentAnalysis as single source of truth.
-
-        Args:
-            selected_keywords: List of keywords to filter by, None for all keywords
-
-        Returns:
-            Dictionary with all KPI metrics: total_posts, sentiment percentages,
-            avg_confidence, posts_today
-        """
-        try:
-            with self.db_connection.get_session() as session:
-                # Base query for sentiment analysis data
-                base_query = session.query(
-                    SentimentAnalysis.sentiment_label,
-                    func.count(SentimentAnalysis.id).label("count"),
-                    func.avg(SentimentAnalysis.confidence_score).label("avg_conf"),
-                )
-
-                # Add keyword filtering if needed
-                if selected_keywords is not None and selected_keywords:
-                    base_query = base_query.filter(
-                        SentimentAnalysis.search_keyword.in_(selected_keywords)
-                    )
-
-                sentiment_result = base_query.group_by(
-                    SentimentAnalysis.sentiment_label
-                ).all()
-
-                total_posts = 0
-                sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}
-                total_confidence_weighted = 0
-
-                for row in sentiment_result:
-                    sentiment = row.sentiment_label
-                    count = row.count
-                    avg_conf = row.avg_conf or 0
-
-                    sentiment_counts[sentiment] = count
-                    total_posts += count
-                    total_confidence_weighted += avg_conf * count
-
-                today = datetime.now().date()
-                today_query = session.query(func.count(SentimentAnalysis.id))
-
-                if selected_keywords is not None and selected_keywords:
-                    today_query = today_query.filter(
-                        SentimentAnalysis.search_keyword.in_(selected_keywords)
-                    )
-
-                today_query = today_query.filter(
-                    func.date(SentimentAnalysis.analyzed_at) == today
-                )
-
-                posts_today = today_query.scalar() or 0
-
-                if total_posts > 0:
-                    positive_pct = sentiment_counts["positive"] / total_posts * 100
-                    negative_pct = sentiment_counts["negative"] / total_posts * 100
-                    neutral_pct = sentiment_counts["neutral"] / total_posts * 100
-                    avg_confidence = total_confidence_weighted / total_posts * 100
-                else:
-                    positive_pct = negative_pct = neutral_pct = avg_confidence = 0
-
-                return {
-                    "total_posts": total_posts,
-                    "positive_percentage": round(positive_pct, 1),
-                    "negative_percentage": round(negative_pct, 1),
-                    "neutral_percentage": round(neutral_pct, 1),
-                    "avg_confidence": round(avg_confidence, 1),
-                    "posts_today": posts_today,
-                }
-
-        except Exception as e:
-            logger.error(f"Error getting unified KPI metrics: {e}")
-            return {
-                "total_posts": 0,
-                "positive_percentage": 0.0,
-                "negative_percentage": 0.0,
-                "neutral_percentage": 0.0,
-                "avg_confidence": 0.0,
-                "posts_today": 0,
-            }
-
-    def get_keyword_specific_kpis(self, selected_keyword: str) -> Dict[str, Any]:
         """
         Get enhanced KPI metrics for a specific keyword.
 
         Args:
             selected_keyword: Single keyword to analyze
+            days: Number of days of historical data to consider
 
         Returns:
             Dictionary with keyword-specific KPI metrics
@@ -700,19 +652,21 @@ class DatabaseOperations:
                 week_posts = self._get_posts_this_week(session, selected_keyword)
                 results.update(week_posts)
 
-                confidence = self._get_keyword_confidence(session, selected_keyword)
+                confidence = self._get_keyword_confidence(
+                    session, selected_keyword, days
+                )
                 results["confidence_score"] = confidence
 
                 momentum = self._get_sentiment_momentum(session, selected_keyword)
                 results.update(momentum)
 
-                rank = self._get_keyword_rank(session, selected_keyword)
+                rank = self._get_keyword_rank(session, selected_keyword, days)
                 results.update(rank)
 
-                daily_avg = self._get_daily_average(session, selected_keyword)
+                daily_avg = self._get_daily_average(session, selected_keyword, days)
                 results["daily_average"] = daily_avg
 
-                peak = self._get_peak_performance(session, selected_keyword)
+                peak = self._get_peak_performance(session, selected_keyword, days)
                 results.update(peak)
 
                 return results
@@ -770,11 +724,15 @@ class DatabaseOperations:
 
         return {"posts_this_week": this_week, "week_trend": round(trend, 1)}
 
-    def _get_keyword_confidence(self, session, keyword: str) -> float:
+    def _get_keyword_confidence(self, session, keyword: str, days: int) -> float:
         """Get average confidence score for this keyword."""
         confidence = (
             session.query(func.avg(SentimentAnalysis.confidence_score))
             .filter(SentimentAnalysis.search_keyword == keyword)
+            .filter(
+                func.date(SentimentAnalysis.analyzed_at)
+                >= datetime.now(timezone.utc).date() - timedelta(days=days)
+            )
             .scalar()
         )
 
@@ -850,7 +808,7 @@ class DatabaseOperations:
             "momentum_change": round(momentum_change, 1),
         }
 
-    def _get_keyword_rank(self, session, keyword: str) -> Dict[str, Any]:
+    def _get_keyword_rank(self, session, keyword: str, days: int) -> Dict[str, Any]:
         """Get rank of this keyword by total posts vs other keywords."""
         keyword_counts = (
             session.query(
@@ -873,16 +831,16 @@ class DatabaseOperations:
 
         return {"keyword_rank": keyword_rank, "total_keywords": total_keywords}
 
-    def _get_daily_average(self, session, keyword: str) -> float:
+    def _get_daily_average(self, session, keyword: str, days: int) -> float:
         """Get average posts per day for this keyword."""
 
-        thirty_days_ago = datetime.now(timezone.utc).date() - timedelta(days=30)
+        days_ago = datetime.now(timezone.utc).date() - timedelta(days=days)
 
         total_posts = (
             session.query(func.count(SentimentAnalysis.id))
             .filter(
                 SentimentAnalysis.search_keyword == keyword,
-                func.date(SentimentAnalysis.analyzed_at) >= thirty_days_ago,
+                func.date(SentimentAnalysis.analyzed_at) >= days_ago,
             )
             .scalar()
             or 0
@@ -890,10 +848,10 @@ class DatabaseOperations:
 
         return round(total_posts / 30, 1)
 
-    def _get_peak_performance(self, session, keyword: str) -> Dict[str, Any]:
+    def _get_peak_performance(self, session, keyword: str, days: int) -> Dict[str, Any]:
         """Get the best sentiment day for this keyword."""
 
-        thirty_days_ago = datetime.now(timezone.utc).date() - timedelta(days=30)
+        days_ago = datetime.now(timezone.utc).date() - timedelta(days=days)
 
         daily_sentiment = (
             session.query(
@@ -909,7 +867,7 @@ class DatabaseOperations:
             )
             .filter(
                 SentimentAnalysis.search_keyword == keyword,
-                func.date(SentimentAnalysis.analyzed_at) >= thirty_days_ago,
+                func.date(SentimentAnalysis.analyzed_at) >= days_ago,
             )
             .group_by(func.date(SentimentAnalysis.analyzed_at))
             .having(func.count(SentimentAnalysis.id) >= 5)
@@ -933,262 +891,8 @@ class DatabaseOperations:
         else:
             return {"peak_sentiment": 0.0, "peak_date": None}
 
-    def get_keyword_insights(
-        self, selected_keywords: Optional[List[str]], days: int = 7
-    ) -> Dict[str, Any]:
-        """
-        Get comprehensive insights for selected keywords.
-
-        Args:
-            selected_keywords: List of keywords to analyze, None for all
-            days: Number of days to analyze (7, 15, or 30)
-
-        Returns:
-            Dictionary with insights data organized by category
-        """
-        try:
-            with self.db_connection.get_session() as session:
-                if not selected_keywords:
-                    return self._get_platform_insights(session, days)
-                elif len(selected_keywords) == 1:
-                    return self._get_single_keyword_insights(
-                        session, selected_keywords[0], days
-                    )
-                else:
-                    return self._get_platform_insights(session, days)
-
-        except Exception as e:
-            logger.error(f"Error getting keyword insights: {e}")
-            return {
-                "trend_analysis": {},
-                "volume_stats": {},
-                "performance_metrics": {},
-                "activity_patterns": {},
-            }
-
-    def _get_single_keyword_insights(
-        self, session, keyword: str, days: int
-    ) -> Dict[str, Any]:
-        """Get insights for a single keyword."""
-
-        end_date = datetime.now(timezone.utc).date()
-        start_date = end_date - timedelta(days=days)
-        previous_start = start_date - timedelta(days=days)
-
-        current_sentiment = (
-            session.query(func.avg(SentimentAnalysis.positive_score))
-            .filter(
-                SentimentAnalysis.search_keyword == keyword,
-                func.date(SentimentAnalysis.analyzed_at) >= start_date,
-            )
-            .scalar()
-            or 0.0
-        )
-
-        previous_sentiment = (
-            session.query(func.avg(SentimentAnalysis.positive_score))
-            .filter(
-                SentimentAnalysis.search_keyword == keyword,
-                func.date(SentimentAnalysis.analyzed_at) >= previous_start,
-                func.date(SentimentAnalysis.analyzed_at) < start_date,
-            )
-            .scalar()
-            or 0.0
-        )
-
-        sentiment_change = 0.0
-        if previous_sentiment > 0:
-            sentiment_change = (
-                (current_sentiment - previous_sentiment) / previous_sentiment
-            ) * 100
-
-        best_day_data = (
-            session.query(
-                func.date(SentimentAnalysis.analyzed_at),
-                func.avg(SentimentAnalysis.positive_score),
-            )
-            .filter(
-                SentimentAnalysis.search_keyword == keyword,
-                func.date(SentimentAnalysis.analyzed_at) >= start_date,
-            )
-            .group_by(func.date(SentimentAnalysis.analyzed_at))
-            .order_by(func.avg(SentimentAnalysis.positive_score).desc())
-            .first()
-        )
-
-        worst_day_data = (
-            session.query(
-                func.date(SentimentAnalysis.analyzed_at),
-                func.avg(SentimentAnalysis.positive_score),
-            )
-            .filter(
-                SentimentAnalysis.search_keyword == keyword,
-                func.date(SentimentAnalysis.analyzed_at) >= start_date,
-            )
-            .group_by(func.date(SentimentAnalysis.analyzed_at))
-            .order_by(func.avg(SentimentAnalysis.positive_score).asc())
-            .first()
-        )
-
-        current_posts = (
-            session.query(func.count(SentimentAnalysis.id))
-            .filter(
-                SentimentAnalysis.search_keyword == keyword,
-                func.date(SentimentAnalysis.analyzed_at) >= start_date,
-            )
-            .scalar()
-            or 0
-        )
-
-        all_keywords_volume = (
-            session.query(
-                SentimentAnalysis.search_keyword,
-                func.count(SentimentAnalysis.id).label("post_count"),
-            )
-            .filter(
-                func.date(SentimentAnalysis.analyzed_at) >= start_date,
-                SentimentAnalysis.search_keyword.isnot(None),
-            )
-            .group_by(SentimentAnalysis.search_keyword)
-            .order_by(func.count(SentimentAnalysis.id).desc())
-            .all()
-        )
-
-        keyword_rank = 1
-        total_keywords = len(all_keywords_volume)
-        for i, (kw, _) in enumerate(all_keywords_volume, 1):
-            if kw == keyword:
-                keyword_rank = i
-                break
-
-        avg_confidence = (
-            session.query(func.avg(SentimentAnalysis.confidence_score))
-            .filter(
-                SentimentAnalysis.search_keyword == keyword,
-                func.date(SentimentAnalysis.analyzed_at) >= start_date,
-            )
-            .scalar()
-            or 0.0
-        )
-
-        hourly_activity = (
-            session.query(
-                func.extract("hour", SentimentAnalysis.analyzed_at).label("hour"),
-                func.count(SentimentAnalysis.id).label("post_count"),
-            )
-            .filter(
-                SentimentAnalysis.search_keyword == keyword,
-                func.date(SentimentAnalysis.analyzed_at) >= start_date,
-            )
-            .group_by(func.extract("hour", SentimentAnalysis.analyzed_at))
-            .order_by(func.count(SentimentAnalysis.id).desc())
-            .limit(3)
-            .all()
-        )
-
-        peak_hours = (
-            [f"{int(hour):02d}:00" for hour, _ in hourly_activity]
-            if hourly_activity
-            else []
-        )
-
-        return {
-            "trend_analysis": {
-                "sentiment_change": round(sentiment_change, 1),
-                "current_sentiment": round(current_sentiment * 100, 1),
-                "trend_direction": (
-                    "improving"
-                    if sentiment_change > 5
-                    else "declining" if sentiment_change < -5 else "stable"
-                ),
-                "best_day": best_day_data[0] if best_day_data else None,
-                "best_sentiment": (
-                    round(best_day_data[1] * 100, 1) if best_day_data else 0.0
-                ),
-                "worst_day": worst_day_data[0] if worst_day_data else None,
-                "worst_sentiment": (
-                    round(worst_day_data[1] * 100, 1) if worst_day_data else 0.0
-                ),
-            },
-            "volume_stats": {
-                "total_posts": current_posts,
-                "keyword_rank": keyword_rank,
-                "total_keywords": total_keywords,
-                "daily_average": round(current_posts / days, 1),
-            },
-            "performance_metrics": {
-                "avg_confidence": round(avg_confidence * 100, 1),
-                "quality_rating": (
-                    "high"
-                    if avg_confidence > 0.8
-                    else "medium" if avg_confidence > 0.6 else "low"
-                ),
-            },
-            "activity_patterns": {
-                "peak_hours": peak_hours[:2],
-                "analysis_period": f"{days} days",
-            },
-        }
-
-    def _get_platform_insights(self, session, days: int) -> Dict[str, Any]:
-        """Get platform-wide insights when all keywords are selected."""
-
-        end_date = datetime.now(timezone.utc).date()
-        start_date = end_date - timedelta(days=days)
-
-        total_posts = (
-            session.query(func.count(SentimentAnalysis.id))
-            .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
-            .scalar()
-            or 0
-        )
-
-        avg_platform_sentiment = (
-            session.query(func.avg(SentimentAnalysis.positive_score))
-            .filter(func.date(SentimentAnalysis.analyzed_at) >= start_date)
-            .scalar()
-            or 0.0
-        )
-
-        top_keywords = (
-            session.query(
-                SentimentAnalysis.search_keyword,
-                func.count(SentimentAnalysis.id).label("post_count"),
-            )
-            .filter(
-                func.date(SentimentAnalysis.analyzed_at) >= start_date,
-                SentimentAnalysis.search_keyword.isnot(None),
-            )
-            .group_by(SentimentAnalysis.search_keyword)
-            .order_by(func.count(SentimentAnalysis.id).desc())
-            .limit(3)
-            .all()
-        )
-
-        return {
-            "trend_analysis": {
-                "platform_sentiment": round(avg_platform_sentiment * 100, 1),
-                "analysis_type": "platform_wide",
-            },
-            "volume_stats": {
-                "total_posts": total_posts,
-                "daily_average": round(total_posts / days, 1),
-                "top_keywords": [kw for kw, _ in top_keywords],
-            },
-            "performance_metrics": {
-                "platform_health": (
-                    "healthy" if avg_platform_sentiment > 0.5 else "mixed"
-                ),
-                "total_keywords": len(top_keywords),
-            },
-            "activity_patterns": {
-                "scope": "all_keywords",
-                "analysis_period": f"{days} days",
-            },
-        }
-
-    def get_text_analysis_for_keywords(
-        self, selected_keywords: List[str], days: int = 30
+    def get_text_analysis_for_keyword(
+        self, selected_keyword: str, days: int
     ) -> List[Dict]:
         """
         Get text content and sentiment data for word cloud analysis.
@@ -1216,7 +920,7 @@ class DatabaseOperations:
                     )
                     .filter(
                         and_(
-                            SentimentAnalysis.search_keyword.in_(selected_keywords),
+                            SentimentAnalysis.search_keyword == selected_keyword,
                             SentimentAnalysis.analyzed_at >= date_threshold,
                             SentimentAnalysis.confidence_score > 0.5,
                             func.length(CleanedPost.cleaned_text) > 10,
@@ -1242,7 +946,6 @@ class DatabaseOperations:
 
         except Exception as e:
             logger.error(f"Error getting text analysis data: {e}")
-
             traceback.print_exc()
             return []
 
