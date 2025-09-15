@@ -18,9 +18,9 @@ import uvicorn
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from sentiment_analyzer import SentimentAnalyzer
-from services.database_service import get_database_service
-from services.bluesky_service import get_bluesky_service
+from .utils.sentiment_analyzer import SentimentAnalyzer
+from .services.database_service import get_database_service
+from .services.bluesky_service import get_bluesky_service
 
 analyzer = None
 service_start_time = time.time()
@@ -291,7 +291,7 @@ async def analyze_sentiment_posts(
 
 if __name__ == "__main__":
     try:
-        from config import config
+        from .config import config
 
         host = config.host if config.host != "localhost" else "0.0.0.0"
         port = config.port
