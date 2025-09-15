@@ -288,22 +288,6 @@ class DashboardDataServiceAPI:
             logger.error(f"Error getting available keywords: {e}")
             return []
 
-    def get_keyword_metrics(self, keyword: str, days: int = 30) -> Dict[str, Any]:
-        cache_key = f"keyword_metrics_{keyword}_{days}"
-        cached_data = self._get_cached_data(cache_key)
-        if cached_data:
-            return cached_data
-
-        try:
-            data = self._api_call(
-                f"/data/metrics/keyword/{keyword}", params={"days": days}
-            )
-            self._set_cache_data(cache_key, data)
-            return data
-        except Exception as e:
-            logger.error(f"Error getting keyword metrics: {e}")
-            return {}
-
     def get_wordcloud_data(self, keyword: str, days: int = 30) -> Dict[str, Any]:
         cache_key = f"wordcloud_data_{keyword}_{days}"
         cached_data = self._get_cached_data(cache_key)
