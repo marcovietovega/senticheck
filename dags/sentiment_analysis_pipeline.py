@@ -12,7 +12,6 @@ from typing import Dict, Any
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.standard.operators.bash import BashOperator
-from airflow.sdk import Variable
 from utils.api_client import SentiCheckAPIClient, APIError
 
 
