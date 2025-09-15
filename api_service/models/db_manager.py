@@ -244,7 +244,7 @@ class SentiCheckDBManager:
 
     def get_sentiment_over_time_filtered(
         self, days: int = 7, selected_keywords: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:  # TODO: move to db_operations
         """
         Get sentiment counts by date for time series analysis, optionally filtered by keywords.
 
