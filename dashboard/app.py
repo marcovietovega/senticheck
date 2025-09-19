@@ -2,6 +2,7 @@
 
 import streamlit as st
 import sys
+import base64
 from pathlib import Path
 
 parent_dir = Path(__file__).parent.parent
@@ -23,11 +24,38 @@ from dashboard.components import (
 )
 
 
+def load_svg_icon():
+    """Load SVG icon and convert to base64 for Streamlit page icon."""
+    try:
+        icon_path = Path(__file__).parent / "assets" / "icons" / "logo.svg"
+        if icon_path.exists():
+            with open(icon_path, "r", encoding="utf-8") as f:
+                svg_content = f.read()
+            svg_base64 = base64.b64encode(svg_content.encode()).decode()
+            return f"data:image/svg+xml;base64,{svg_base64}"
+    except Exception:
+        pass
+    return None
+
+
+def load_svg_for_display():
+    """Load SVG icon for direct display in the dashboard."""
+    try:
+        icon_path = Path(__file__).parent / "assets" / "icons" / "logo.svg"
+        if icon_path.exists():
+            with open(icon_path, "r", encoding="utf-8") as f:
+                return f.read()
+    except Exception:
+        pass
+    return None
+
+
 def configure_page():
     """Configure Streamlit page settings."""
+    icon_data = load_svg_icon()
     st.set_page_config(
         page_title="SentiCheck",
-        page_icon="📊",
+        page_icon=icon_data,
         layout="wide",
         initial_sidebar_state="expanded",
         menu_items={"About": "SentiCheck - Sentiment analysis dashboard"},
@@ -35,12 +63,18 @@ def configure_page():
 
 
 def render_page_title():
-    """Render the main page title"""
+    """Render the main page title with SVG icon support."""
+    svg_icon = load_svg_for_display()
+    styled_svg = svg_icon.replace(
+        "<svg",
+        '<svg style="width: 80px; height: 80px; vertical-align: middle"',
+    )
+
     st.markdown(
-        """
+        f"""
         <div class="page-title-container">
-            <h1 class="page-title">
-                📊 SentiCheck
+            <h1 class="page-title" style="display: flex; align-items: center; justify-content: center;">
+                {styled_svg}SentiCheck
             </h1>
             <div class="page-subtitle">
                 Sentiment insights from social media posts
