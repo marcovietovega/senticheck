@@ -59,8 +59,8 @@ class DashboardDataServiceAPI:
             return response.json()
 
         except requests.RequestException as e:
-            logger.error(f"API call failed for {endpoint}: {e}")
-            raise
+            logger.warning(f"API call failed for {endpoint}: {e}")
+            raise e
 
     def get_sentiment_distribution(
         self, selected_keyword: str, days: int = 30
