@@ -2,7 +2,7 @@ import streamlit as st
 from typing import Dict, Any
 import logging
 
-from dashboard.data_service_api import get_dashboard_data_service
+from data_service_api import get_dashboard_data_service
 
 logger = logging.getLogger(__name__)
 

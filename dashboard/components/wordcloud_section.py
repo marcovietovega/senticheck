@@ -6,14 +6,10 @@ Provides word frequency visualization with sentiment-based coloring.
 import streamlit as st
 import logging
 
-from dashboard.charts.chart_templates import create_chart_template
-from dashboard.data_service_api import get_dashboard_data_service
-from dashboard.utils import render_metric_card
+from charts.chart_templates import create_chart_template
+from data_service_api import get_dashboard_data_service
+from utils import render_metric_card
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 logger = logging.getLogger(__name__)
 

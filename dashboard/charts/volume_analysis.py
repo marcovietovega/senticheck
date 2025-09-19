@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 
 import streamlit as st
-import sys
-from pathlib import Path
 
-parent_dir = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(parent_dir))
 
-from dashboard.charts.chart_templates import create_chart_template
+from charts.chart_templates import create_chart_template
 
 
 def render_volume_analysis_chart(selected_keyword: str, days: int = 30):
