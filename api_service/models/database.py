@@ -50,6 +50,7 @@ class CleanedPost(Base):
     )
     cleaned_text = Column(Text, nullable=False)
     original_text = Column(Text, nullable=False)
+    search_keyword = Column(String(255), nullable=False, index=True)
     preserve_hashtags = Column(Boolean, default=False)
     preserve_mentions = Column(Boolean, default=False)
     cleaning_metadata = Column(JSON, nullable=True)

@@ -1,8 +1,3 @@
-"""
-Word cloud content filters for SentiCheck dashboard.
-Expert-curated list of words to exclude from word cloud generation.
-"""
-
 STOP_WORDS = {
     "the",
     "and",
@@ -129,6 +124,9 @@ STOP_WORDS = {
     "many",
     "want",
     "dont",
+    "doesnt",
+    "doesn",
+    "didnt",
     "here",
     "there",
     "over",
@@ -152,6 +150,9 @@ STOP_WORDS = {
     "http",
     "https",
     "ass",
+    "fuck",
+    "fucking",
+    "shit",
     "sexy",
     "boobs",
     "bigtits",

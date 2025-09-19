@@ -1,11 +1,16 @@
 import logging
 import time
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 from datetime import datetime
+import threading
 
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
 
 logger = logging.getLogger(__name__)
+
+# Global model cache to prevent reloading
+_model_cache = {}
+_cache_lock = threading.Lock()
 
 
 class SentimentAnalyzer:
@@ -25,6 +30,35 @@ class SentimentAnalyzer:
         self.tokenizer = None
         self.model = None
         self.is_initialized = False
+
+    @classmethod
+    def get_cached_analyzer(
+        cls, model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+    ):
+        """Get a cached analyzer instance to avoid reloading models.
+
+        Args:
+            model_name: Hugging Face model name for sentiment analysis
+
+        Returns:
+            Cached SentimentAnalyzer instance or None if initialization failed
+        """
+        with _cache_lock:
+            if model_name not in _model_cache:
+                logger.info(f"Creating new cached analyzer for model: {model_name}")
+                analyzer = cls(model_name)
+                if analyzer.initialize():
+                    _model_cache[model_name] = analyzer
+                    logger.info(f"Successfully cached analyzer for model: {model_name}")
+                else:
+                    logger.error(
+                        f"Failed to initialize analyzer for model: {model_name}"
+                    )
+                    return None
+            else:
+                logger.debug(f"Using cached analyzer for model: {model_name}")
+
+            return _model_cache.get(model_name)
 
     def initialize(self) -> bool:
         """Initialize the sentiment analysis model.
@@ -179,27 +213,6 @@ class SentimentAnalyzer:
 
         return analyzed_posts
 
-    def get_model_info(self) -> Dict:
-        """Get information about the loaded model.
-
-        Returns:
-            Model information
-        """
-        if not self.is_initialized:
-            return {"error": "Model not initialized"}
-
-        try:
-            return {
-                "model_name": self.model_name,
-                "model_type": type(self.model).__name__,
-                "tokenizer_type": type(self.tokenizer).__name__,
-                "max_length": getattr(self.tokenizer, "model_max_length", "unknown"),
-                "vocab_size": getattr(self.tokenizer, "vocab_size", "unknown"),
-            }
-        except Exception as e:
-            logger.error(f"Error getting model info: {e}")
-            return {"error": str(e)}
-
 
 def analyze_sentiment_batch(
     posts: List[Dict],
@@ -214,10 +227,10 @@ def analyze_sentiment_batch(
     Returns:
         List of posts with sentiment analysis results
     """
-    analyzer = SentimentAnalyzer(model_name)
+    analyzer = SentimentAnalyzer.get_cached_analyzer(model_name)
 
-    if not analyzer.initialize():
-        logger.error("Failed to initialize sentiment analyzer")
+    if not analyzer:
+        logger.error("Failed to get cached sentiment analyzer")
         return []
 
     try:
@@ -225,5 +238,3 @@ def analyze_sentiment_batch(
     except Exception as e:
         logger.error(f"Batch sentiment analysis failed: {e}")
         return []
-
-
