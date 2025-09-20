@@ -1,19 +1,11 @@
 import logging
-import sys
-import os
 from typing import List, Dict, Any
 
 
-project_root = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-from api_service.utils.text_cleaner import clean_bluesky_posts
-from api_service.models.database import RawPost
-from api_service.models.db_manager import get_db_manager
-from api_service.utils.sentiment_analyzer import SentimentAnalyzer
+from utils.text_cleaner import clean_bluesky_posts
+from models.database import RawPost
+from models.db_manager import get_db_manager
+from utils.sentiment_analyzer import SentimentAnalyzer
 
 logger = logging.getLogger(__name__)
 

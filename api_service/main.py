@@ -18,17 +18,11 @@ import uvicorn
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import sys
-from pathlib import Path
 
-project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-from api_service.utils.sentiment_analyzer import SentimentAnalyzer
-from api_service.services.database_service import get_database_service
-from api_service.services.bluesky_service import get_bluesky_service
-from api_service.config import config
+from utils.sentiment_analyzer import SentimentAnalyzer
+from services.database_service import get_database_service
+from services.bluesky_service import get_bluesky_service
+from config import config
 
 analyzer = None
 service_start_time = time.time()

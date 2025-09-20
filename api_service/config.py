@@ -6,7 +6,6 @@ for both the FastAPI service and the client.
 """
 
 import os
-from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
