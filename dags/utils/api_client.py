@@ -132,3 +132,17 @@ class SentiCheckAPIClient:
             params={"model_name": model_name},
             timeout=600,
         )
+
+    def wake_api(self, timeout: int = 30) -> Dict[str, Any]:
+        """Wake up the API service before processing tasks.
+        
+        This helps eliminate cold start delays in Azure Container Apps
+        by sending a health check request 30 seconds before processing.
+        
+        Args:
+            timeout: Request timeout in seconds
+            
+        Returns:
+            Health check response
+        """
+        return self._make_request("get", "/health", timeout=timeout)
