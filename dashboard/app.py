@@ -1,23 +1,19 @@
 #!/usr/bin/env python3
 
 import streamlit as st
-import sys
 import base64
 from pathlib import Path
 
-parent_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(parent_dir))
 
-
-from dashboard.charts import (
+from charts import (
     render_sentiment_over_time_chart,
     render_sentiment_distribution_chart,
     render_volume_analysis_chart,
 )
-from dashboard.styles import apply_all_styles
-from dashboard.data_service_api import get_dashboard_data_service
-from dashboard.utils import render_metric_card
-from dashboard.components import (
+from styles import apply_all_styles
+from data_service_api import get_dashboard_data_service
+from utils import render_metric_card
+from components import (
     render_sidebar_controls,
     update_session_state_from_sidebar,
     render_wordcloud_section,

@@ -1,0 +1,52 @@
+# Version control files
+.git
+.gitignore
+
+# Python cache files
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environments
+venv/
+.venv
+env/
+.env
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+README*
+
+# Log files
+*.log
+logs/
+
+# Test files
+*test*
+tests/
+.pytest_cache/
+.coverage
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Docker files themselves (no need to copy Docker files into Docker!)
+Dockerfile*
+docker-compose*
+.dockerignore

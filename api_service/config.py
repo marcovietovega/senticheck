@@ -6,7 +6,6 @@ for both the FastAPI service and the client.
 """
 
 import os
-from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -31,15 +30,12 @@ class ServiceConfig:
     def __init__(self):
         """Initialize configuration from environment variables with defaults."""
 
-        # Service connection settings
         self.host = os.getenv("SENTIMENT_SERVICE_HOST", FALLBACK_SERVICE_HOST)
         self.port = int(os.getenv("SENTIMENT_SERVICE_PORT", FALLBACK_SERVICE_PORT))
         self.base_url = f"http://{self.host}:{self.port}"
 
-        # Model settings
         self.model_name = os.getenv("SENTIMENT_MODEL_NAME", FALLBACK_MODEL_NAME)
 
-        # Client settings
         self.timeout = float(
             os.getenv("SENTIMENT_CLIENT_TIMEOUT", FALLBACK_CLIENT_TIMEOUT)
         )
@@ -48,7 +44,6 @@ class ServiceConfig:
             os.getenv("SENTIMENT_RETRY_DELAY", FALLBACK_RETRY_DELAY)
         )
 
-        # Processing settings
         self.batch_size = int(os.getenv("SENTIMENT_BATCH_SIZE", FALLBACK_BATCH_SIZE))
         self.max_text_length = int(
             os.getenv("SENTIMENT_MAX_TEXT_LENGTH", FALLBACK_TEXT_LENGTH)
@@ -97,7 +92,6 @@ def update_config_from_airflow_variables(variables_getter) -> None:
         variables_getter: Function to get Airflow Variables (usually Variable.get)
     """
     try:
-        # Update service URL if provided
         service_host = variables_getter(
             "sentiment_service_host", default_var=config.host
         )
@@ -110,19 +104,15 @@ def update_config_from_airflow_variables(variables_getter) -> None:
             config.port = service_port
             config.base_url = f"http://{config.host}:{config.port}"
 
-        # Update model name
         config.model_name = variables_getter(
             "sentiment_model_name", default_var=config.model_name
         )
 
-        # Update batch size
         config.batch_size = int(
             variables_getter("sentiment_batch_size", default_var=config.batch_size)
         )
 
-        # Ensure batch size is within limits
         config.batch_size = min(config.batch_size, MAX_BATCH_SIZE)
 
     except Exception as e:
-        # If Airflow variables are not available, use defaults
         pass

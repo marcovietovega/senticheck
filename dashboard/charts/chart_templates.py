@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
 
 import plotly.graph_objects as go
-import sys
 import logging
-from pathlib import Path
 from typing import Optional
 from wordcloud import WordCloud
 import pandas as pd
 
 
-parent_dir = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(parent_dir))
-
-from dashboard.data_service_api import get_dashboard_data_service
+from data_service_api import get_dashboard_data_service
 
 logger = logging.getLogger(__name__)
 

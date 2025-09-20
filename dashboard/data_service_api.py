@@ -6,9 +6,10 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from collections import Counter
 import re
+import os
 
-from dashboard.config import DASHBOARD_CONFIG
-from dashboard.wordcloud_filters import get_stop_words
+from config import DASHBOARD_CONFIG
+from wordcloud_filters import get_stop_words
 
 logger = logging.getLogger(__name__)
 
@@ -392,5 +393,7 @@ _data_service = None
 def get_dashboard_data_service() -> DashboardDataServiceAPI:
     global _data_service
     if _data_service is None:
-        _data_service = DashboardDataServiceAPI()
+        _data_service = DashboardDataServiceAPI(
+            api_base_url=os.getenv("API_SERVICE_URL", "http://localhost:8000")
+        )
     return _data_service
