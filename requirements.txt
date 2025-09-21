@@ -1,31 +1,17 @@
-# Bluesky AT Protocol client
 atproto>=0.0.62
-
-# Database connectivity
 psycopg2-binary>=2.9.0
 sqlalchemy==1.4.54
-
-# Environment variable management
 python-dotenv>=1.0.0
-
-# Machine Learning (for sentiment analysis)
 transformers>=4.30.0
 torch>=2.0.0
-
-# FastAPI for REST API service
 fastapi>=0.104.0
 uvicorn>=0.24.0
 pydantic>=2.0.0
-
-# HTTP client for Airflow to call FastAPI service
 httpx>=0.25.0
 requests>=2.31.0
-
-# Streamlit for dashboard
 streamlit>=1.32.0
 plotly>=5.17.0
 pandas>=2.0.0
 numpy>=1.24.0
 wordcloud>=1.9.0
 pillow>=10.0.0
-
