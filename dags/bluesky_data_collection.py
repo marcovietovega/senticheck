@@ -15,7 +15,6 @@ from airflow.sdk import Variable
 from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOperator
 import json
 from utils.api_client import SentiCheckAPIClient, APIError
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -39,39 +38,6 @@ dag = DAG(
     tags=["bluesky", "data-collection", "senticheck"],
     max_active_runs=1,
 )
-
-
-def wake_api_service(**context) -> Dict[str, Any]:
-    """Wake up the API service before data collection.
-
-    This eliminates cold start delays by sending a health check
-    30 seconds before the main processing task begins.
-
-    Returns:
-        Wake-up result status
-    """
-    try:
-        logger.info("Waking up API service...")
-
-        api_client = SentiCheckAPIClient()
-        health_response = api_client.wake_api()
-
-        logger.info("API service health check successful")
-
-        time.sleep(30)
-
-        return {
-            "status": "success",
-            "health_response": health_response,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    except APIError as e:
-        logger.error("Failed to wake API service: %s", str(e))
-        raise
-    except Exception as e:
-        logger.error("Error waking API service: %s", str(e))
-        raise
 
 
 def fetch_bluesky_posts(**context) -> Dict[str, Any]:
@@ -147,11 +113,6 @@ def fetch_bluesky_posts(**context) -> Dict[str, Any]:
         raise
 
 
-wake_task = PythonOperator(
-    task_id="wake_api_service",
-    python_callable=wake_api_service,
-    dag=dag,
-)
 fetch_and_store_posts_task = PythonOperator(
     task_id="fetch_and_store_posts",
     python_callable=fetch_bluesky_posts,
@@ -166,5 +127,4 @@ trigger_cleaning = TriggerDagRunOperator(
     dag=dag,
 )
 
-# Task dependencies: wake API -> fetch posts -> trigger cleaning
-wake_task >> fetch_and_store_posts_task >> trigger_cleaning
+fetch_and_store_posts_task >> trigger_cleaning
