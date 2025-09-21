@@ -10,7 +10,7 @@ from utils.api_client import SentiCheckAPIClient, APIError
 
 
 @app.timer_trigger(
-    schedule="0 0 * * * *", arg_name="mytimer", run_on_startup=True, use_monitor=False
+    schedule="0 0 * * * *", arg_name="mytimer", run_on_startup=False, use_monitor=False
 )
 def data_pipeline_orchestrator(mytimer: func.TimerRequest) -> None:
     try:
