@@ -1,10 +1,3 @@
-# SentiCheck - Production Requirements
-# Only packages actually used in the current implementation
-
-# Apache Airflow for workflow orchestration
-apache-airflow>=3.0.4
-apache-airflow-providers-postgres>=6.2.0
-
 # Bluesky AT Protocol client
 atproto>=0.0.62
 
