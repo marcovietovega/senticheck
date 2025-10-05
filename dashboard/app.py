@@ -118,7 +118,7 @@ def render_kpi_section(selected_keyword: str, days: int = 30):
                 delta_color=(
                     "positive" if kpi_data["positive_trend"] >= 0 else "negative"
                 ),
-                help_text="Percentage of posts with positive sentiment",
+                help_text="Posts classified as having a positive tone",
             )
 
         with col3:
@@ -133,7 +133,7 @@ def render_kpi_section(selected_keyword: str, days: int = 30):
                 delta_color=(
                     "positive" if kpi_data["confidence_trend"] >= 0 else "negative"
                 ),
-                help_text=f"Average confidence score for {selected_keyword} sentiment predictions",
+                help_text="How confident the model is about these sentiment scores (higher is better)",
             )
 
         st.markdown('<div class="spacing-top-2xl"></div>', unsafe_allow_html=True)
@@ -151,7 +151,7 @@ def render_kpi_section(selected_keyword: str, days: int = 30):
                     else "→ No change"
                 ),
                 delta_color=week_trend_color,
-                help_text=f"Weekly posts for {selected_keyword} with trend analysis",
+                help_text="Total posts collected this week",
             )
 
         with col5:
@@ -172,7 +172,7 @@ def render_kpi_section(selected_keyword: str, days: int = 30):
                     else "No change"
                 ),
                 delta_color=momentum_colors.get(momentum, "neutral"),
-                help_text="Recent sentiment trend direction for this keyword",
+                help_text="Whether sentiment is getting more positive or negative over the past 3 days",
             )
 
         with col6:
@@ -183,7 +183,7 @@ def render_kpi_section(selected_keyword: str, days: int = 30):
                 value=f"#{rank} of {total}",
                 delta=f"By post volume",
                 delta_color="neutral",
-                help_text=f"{selected_keyword} ranks #{rank} by total post count",
+                help_text="Ranking by volume compared to other tracked keywords",
             )
 
         st.markdown('<div class="spacing-top-2xl"></div>', unsafe_allow_html=True)
@@ -196,7 +196,7 @@ def render_kpi_section(selected_keyword: str, days: int = 30):
                 value=f"{kpi_data['daily_average']:.1f}",
                 delta="posts per day",
                 delta_color="neutral",
-                help_text=f"Average daily posts for {selected_keyword} (30-day avg)",
+                help_text="Typical number of posts per day over the last 30 days",
             )
 
         with col8:

@@ -24,7 +24,7 @@ def render_sidebar_controls() -> Dict[str, Any]:
                 options=["7 days", "15 days", "30 days"],
                 index=0,
                 key="unified_time_range",
-                help="Select time period for all charts and analysis",
+                help="Time period to analyze",
             )
 
             days_map = {"7 days": 7, "15 days": 15, "30 days": 30}
@@ -52,7 +52,7 @@ def render_sidebar_controls() -> Dict[str, Any]:
                 options=available_keywords,
                 format_func=format_keyword_with_count,
                 key="sidebar_keyword_selector",
-                help="Choose keyword for individual analysis within selected time range",
+                help="Keyword to analyze in detail",
             )
 
             st.markdown("---")

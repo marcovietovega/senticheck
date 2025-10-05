@@ -104,7 +104,7 @@ def render_wordcloud_stats(keyword: str, days: int = 30):
                     if neutral_word != "None"
                     else "No neutral words found"
                 ),
-                help_text="Word closest to neutral sentiment (0.5) in discussions",
+                help_text="Word with the most balanced sentiment (neither positive nor negative)",
             )
 
         with col3:
