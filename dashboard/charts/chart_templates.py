@@ -166,7 +166,7 @@ class ChartTemplate:
                         hole=0.3,
                         marker=dict(colors=colors, line=dict(color="white", width=2)),
                         textinfo="label+percent",
-                        textfont_size=12,
+                        textfont=dict(size=12, color="white"),
                         hovertemplate="<b>%{label}</b><br>"
                         + "Posts: %{value:,}<br>"
                         + "Percentage: %{percent}<br>"

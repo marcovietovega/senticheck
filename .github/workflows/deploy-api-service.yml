@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'api_service/**'
-      - '.github/workflows/deploy-api-service.yml'
+      - "api_service/**"
+      - ".github/workflows/deploy-api-service.yml"
   workflow_dispatch:
 
 env:
@@ -44,4 +44,3 @@ jobs:
           echo "- **Image:** ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
           echo "- **Status:** Image pushed to registry" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Note:** Container App will automatically pull the new image on next restart." >> $GITHUB_STEP_SUMMARY
