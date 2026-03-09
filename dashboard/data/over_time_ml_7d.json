@@ -1,0 +1,44 @@
+[
+  {
+    "date": "2025-12-19",
+    "positive": 52,
+    "negative": 53,
+    "neutral": 158
+  },
+  {
+    "date": "2025-12-20",
+    "positive": 81,
+    "negative": 54,
+    "neutral": 167
+  },
+  {
+    "date": "2025-12-21",
+    "positive": 39,
+    "negative": 29,
+    "neutral": 103
+  },
+  {
+    "date": "2025-12-22",
+    "positive": 59,
+    "negative": 94,
+    "neutral": 172
+  },
+  {
+    "date": "2025-12-23",
+    "positive": 30,
+    "negative": 36,
+    "neutral": 104
+  },
+  {
+    "date": "2025-12-24",
+    "positive": 51,
+    "negative": 26,
+    "neutral": 93
+  },
+  {
+    "date": "2025-12-25",
+    "positive": 51,
+    "negative": 31,
+    "neutral": 71
+  }
+]

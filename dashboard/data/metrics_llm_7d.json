@@ -1,0 +1,23 @@
+{
+  "total_posts": 2387,
+  "positive_percentage": 11.3,
+  "negative_percentage": 41.9,
+  "neutral_percentage": 46.8,
+  "avg_confidence": 73.4,
+  "posts_today": 251,
+  "posts_this_week": 1034,
+  "week_trend": -54.3,
+  "confidence_score": 73.4,
+  "sentiment_momentum": "stable",
+  "momentum_change": -1.1,
+  "keyword_rank": 2,
+  "total_keywords": 3,
+  "daily_average": 341.0,
+  "peak_sentiment": 42.4,
+  "peak_date": "2025-12-25",
+  "positive_trend": -3.4,
+  "negative_trend": 0.4,
+  "neutral_trend": 11.7,
+  "confidence_trend": 0.0,
+  "daily_trend": -15.2
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "date": "2025-12-11",
+    "positive": 60,
+    "negative": 182,
+    "neutral": 245
+  },
+  {
+    "date": "2025-12-12",
+    "positive": 35,
+    "negative": 120,
+    "neutral": 168
+  },
+  {
+    "date": "2025-12-13",
+    "positive": 71,
+    "negative": 181,
+    "neutral": 202
+  },
+  {
+    "date": "2025-12-14",
+    "positive": 25,
+    "negative": 68,
+    "neutral": 100
+  },
+  {
+    "date": "2025-12-15",
+    "positive": 36,
+    "negative": 117,
+    "neutral": 141
+  },
+  {
+    "date": "2025-12-16",
+    "positive": 34,
+    "negative": 131,
+    "neutral": 168
+  },
+  {
+    "date": "2025-12-17",
+    "positive": 19,
+    "negative": 120,
+    "neutral": 145
+  },
+  {
+    "date": "2025-12-18",
+    "positive": 32,
+    "negative": 126,
+    "neutral": 136
+  },
+  {
+    "date": "2025-12-19",
+    "positive": 58,
+    "negative": 154,
+    "neutral": 165
+  },
+  {
+    "date": "2025-12-20",
+    "positive": 51,
+    "negative": 228,
+    "neutral": 209
+  },
+  {
+    "date": "2025-12-21",
+    "positive": 18,
+    "negative": 92,
+    "neutral": 84
+  },
+  {
+    "date": "2025-12-22",
+    "positive": 22,
+    "negative": 85,
+    "neutral": 87
+  },
+  {
+    "date": "2025-12-23",
+    "positive": 19,
+    "negative": 112,
+    "neutral": 162
+  },
+  {
+    "date": "2025-12-24",
+    "positive": 36,
+    "negative": 133,
+    "neutral": 127
+  },
+  {
+    "date": "2025-12-25",
+    "positive": 33,
+    "negative": 71,
+    "neutral": 147
+  }
+]

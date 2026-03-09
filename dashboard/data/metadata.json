@@ -1,0 +1,70 @@
+{
+  "reference_date": "2025-12-25",
+  "keywords": [
+    "AI",
+    "LLM",
+    "ML"
+  ],
+  "time_ranges": [
+    7,
+    15,
+    30
+  ],
+  "exported_at": "2026-03-09T20:15:37.953971",
+  "total_rows": {
+    "ai_7d": {
+      "distribution": 1787,
+      "over_time_days": 7,
+      "text_analysis_posts": 1684,
+      "total_posts": 1787
+    },
+    "ai_15d": {
+      "distribution": 4411,
+      "over_time_days": 15,
+      "text_analysis_posts": 4148,
+      "total_posts": 4411
+    },
+    "ai_30d": {
+      "distribution": 37534,
+      "over_time_days": 30,
+      "text_analysis_posts": 15000,
+      "total_posts": 37534
+    },
+    "llm_7d": {
+      "distribution": 2387,
+      "over_time_days": 7,
+      "text_analysis_posts": 2252,
+      "total_posts": 2387
+    },
+    "llm_15d": {
+      "distribution": 5344,
+      "over_time_days": 15,
+      "text_analysis_posts": 5084,
+      "total_posts": 5344
+    },
+    "llm_30d": {
+      "distribution": 13498,
+      "over_time_days": 30,
+      "text_analysis_posts": 12773,
+      "total_posts": 13498
+    },
+    "ml_7d": {
+      "distribution": 1732,
+      "over_time_days": 7,
+      "text_analysis_posts": 1664,
+      "total_posts": 1732
+    },
+    "ml_15d": {
+      "distribution": 3099,
+      "over_time_days": 15,
+      "text_analysis_posts": 2986,
+      "total_posts": 3099
+    },
+    "ml_30d": {
+      "distribution": 6417,
+      "over_time_days": 30,
+      "text_analysis_posts": 6153,
+      "total_posts": 6417
+    }
+  }
+}
