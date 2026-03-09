@@ -7,7 +7,7 @@ import streamlit as st
 import logging
 
 from charts.chart_templates import create_chart_template
-from data_service_api import get_dashboard_data_service
+from data_service_static import get_dashboard_data_service
 from utils import render_metric_card
 
 
