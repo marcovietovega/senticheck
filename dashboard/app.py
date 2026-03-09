@@ -11,7 +11,7 @@ from charts import (
     render_volume_analysis_chart,
 )
 from styles import apply_all_styles
-from data_service_api import get_dashboard_data_service
+from data_service_static import get_dashboard_data_service
 from utils import render_metric_card
 from components import (
     render_sidebar_controls,
